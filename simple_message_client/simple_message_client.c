@@ -26,14 +26,39 @@ int main(int argc, const char * argv[]) {
     const char *message;
     int verbose;
 
-    int socketdiscriptor;
-	struct sockaddr_in sa;
-	int len_sa = sizeof(sa);
-    
+    int socketfd = -1;
+	struct addrinfo clientsock;
+    memset(&clientsock, 0, sizeof(clientsock)); /* Ausnullen */
+	struct addrinfo 
+
     
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
     printf("All params parsed correctly\n");
     return 0;
+
+
+// todos:
+// connection
+// message send
+// waiting for response
+
+	if ( (socketfd = socket(PF_UNSPEC, SOCK_STREAM, TCP)) == -1 ) {
+		close(socketfd);
+		fprintf(stderr, "Can not create socket\n");
+		exit(EXIT_FAILURE);
+	}
+
+	//Howto check if ipv4 or ipv6?
+    //socketfd = socket(PF_INET, SOCK_STREAM, TCP);
+    //socketfd = socket(PF_INET6, SOCK_STREAM, TCP);
+    
+	/* try ipv6 first, if fail: connect ipv4 */
+
+	if ( (connect(socketfd, (struct sockaddr*)&sa, len_sa)) == -1) {
+			// print ERROR
+			// errno?
+	}
+
 }
 
 
@@ -42,26 +67,5 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode) {
     fprintf(stream, "%s: %s\n", cmnd, "-s server -p port -u user [-i image URL] -m message [-v] [-h]");
     exit(exitcode);
 }
-
-// todos:
-// connection
-// message send
-// waiting for response
-
-	//Howto check if ipv4 or ipv6?
-    //socketdiscriptor = socket(PF_INET, SOCK_STREAM, TCP);
-    //socketdiscriptor = socket(PF_INET6, SOCK_STREAM, TCP);
-    
-	if ( (socketdiscriptor = socket(PF_INET, SOCK_STREAM, TCP)) == -1 ) {
-			// print ERROR
-			// errno?
-	}
-
-    memset(&sa, 0, len_sa); /* Ausnullen */
-
-	if ( (connect(socketdiscriptor, (struct sockaddr*)&sa, len_sa)) == -1) {
-			// print ERROR
-			// errno?
-	}
 
 
