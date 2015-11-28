@@ -8,6 +8,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "simple_message_client_commandline_handling.h"
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
@@ -23,6 +25,10 @@ int main(int argc, const char * argv[]) {
     const char *image_url;
     const char *message;
     int verbose;
+
+    int socketdiscriptor;
+	struct sockaddr_in sa;
+	int len_sa = sizeof(sa);
     
     
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
@@ -37,8 +43,25 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode) {
     exit(exitcode);
 }
 
+// todos:
+// connection
+// message send
+// waiting for response
 
+	//Howto check if ipv4 or ipv6?
+    //socketdiscriptor = socket(PF_INET, SOCK_STREAM, TCP);
+    //socketdiscriptor = socket(PF_INET6, SOCK_STREAM, TCP);
+    
+	if ( (socketdiscriptor = socket(PF_INET, SOCK_STREAM, TCP)) == -1 ) {
+			// print ERROR
+			// errno?
+	}
 
+    memset(&sa, 0, len_sa); /* Ausnullen */
 
+	if ( (connect(socketdiscriptor, (struct sockaddr*)&sa, len_sa)) == -1) {
+			// print ERROR
+			// errno?
+	}
 
 
