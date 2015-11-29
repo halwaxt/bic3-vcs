@@ -47,8 +47,9 @@ int main(int argc, const char * argv[]) {
 
     struct addrinfo hints;
     struct addrinfo *result, *rp;
-    int sfd, s, j;
-    size_t len;
+//    int sfd, s, j;
+    int sfd, s;
+//    size_t len;
     ssize_t nread;
     char buf[BUF_SIZE];
 
@@ -100,7 +101,7 @@ int main(int argc, const char * argv[]) {
         fprintf(stderr, "Message to long");
         exit(EXIT_FAILURE);
     }
-	strncat(buf, user, sizeof(user));
+	strncat(buf, user, strlen(user));
     if ((strlen(buf) + 1) > BUF_SIZE) {
         fprintf(stderr, "Message to long");
         exit(EXIT_FAILURE);
@@ -116,7 +117,7 @@ int main(int argc, const char * argv[]) {
         	fprintf(stderr, "Message to long");
         	exit(EXIT_FAILURE);
     	}
-		strncat(buf, image_url, sizeof(image_url));
+		strncat(buf, image_url, strlen(image_url));
     	if ((strlen(buf) + 1) > BUF_SIZE) {
         	fprintf(stderr, "Message to long");
         	exit(EXIT_FAILURE);
@@ -127,7 +128,7 @@ int main(int argc, const char * argv[]) {
         	exit(EXIT_FAILURE);
     	}
 	}
-	strncat(buf, message, sizeof(message));
+	strncat(buf, message, strlen(message));
     if ((strlen(buf) + 1) > BUF_SIZE) {
         fprintf(stderr, "Message to long");
         exit(EXIT_FAILURE);
