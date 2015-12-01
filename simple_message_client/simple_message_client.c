@@ -19,8 +19,9 @@
 #define BUF_SIZE 6000 /* Examples in protocol analysis were about 4500 bytes */
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
-ssize_t write_sock(int fd, const void *puffer, size_t n);
-ssize_t read_sock(int fd, void *puffer, size_t n);
+
+
+int sendData(FILE *target, const char *key, const char *payload);
 
 int main(int argc, const char * argv[]) {
     /*
@@ -48,10 +49,11 @@ int main(int argc, const char * argv[]) {
     struct addrinfo hints;
     struct addrinfo *result, *rp;
 //    int sfd, s, j;
-    int sfd, s;
+    int sfd = -1;
+    int s = -1;
 //    size_t len;
-    ssize_t nread;
-    char buf[BUF_SIZE];
+    //ssize_t nread;
+    //char buf[BUF_SIZE];
 
     /* Obtain address(es) matching host/port */
 
@@ -91,77 +93,33 @@ int main(int argc, const char * argv[]) {
 
     freeaddrinfo(result);           /* No longer needed */
 
-    /* Send remaining command-line arguments as separate
-       datagrams, and read responses from server */
+    FILE *target = fdopen(sfd, "w");
+    
+    sendData(target, "user=", user);
+    sendData(target, "", message);
+    
+    /* fclose schließt auch sfd, daher vorher ein DUP2 */
+    
+    int backupOfSfd = dup(sfd);
+    
+    shutdown(sfd, SHUT_RD);
+    /* destroys also sfd */
+    fclose(target);
+    
+    FILE *fromServer = fdopen(backupOfSfd, "r");
+    
+    fclose(fromServer);
+    close(backupOfSfd);
+}
 
-	/* Build complete message in buffer, reuse buffer later for receiving */
 
-	strncpy(buf, "user=", 5);
-    if ((strlen(buf) + 1) > BUF_SIZE) {
-        fprintf(stderr, "Message to long");
-        exit(EXIT_FAILURE);
-    }
-	strncat(buf, user, strlen(user));
-    if ((strlen(buf) + 1) > BUF_SIZE) {
-        fprintf(stderr, "Message to long");
-        exit(EXIT_FAILURE);
-    }
-	strncat(buf, "\n", 1);
-    if ((strlen(buf) + 1) > BUF_SIZE) {
-        fprintf(stderr, "Message to long");
-        exit(EXIT_FAILURE);
-    }
-	if (image_url != NULL) {
-		strncat(buf, "img=", 4);
-    	if ((strlen(buf) + 1) > BUF_SIZE) {
-        	fprintf(stderr, "Message to long");
-        	exit(EXIT_FAILURE);
-    	}
-		strncat(buf, image_url, strlen(image_url));
-    	if ((strlen(buf) + 1) > BUF_SIZE) {
-        	fprintf(stderr, "Message to long");
-        	exit(EXIT_FAILURE);
-    	}
-		strncat(buf, "\n", 1);
-    	if ((strlen(buf) + 1) > BUF_SIZE) {
-        	fprintf(stderr, "Message to long");
-        	exit(EXIT_FAILURE);
-    	}
-	}
-	strncat(buf, message, strlen(message));
-    if ((strlen(buf) + 1) > BUF_SIZE) {
-        fprintf(stderr, "Message to long");
-        exit(EXIT_FAILURE);
-    }
-
-    if ((write_sock(sfd, &buf, sizeof(buf))) != sizeof(buf)) {
-        fprintf(stderr, "partial/failed write\n");
-        exit(EXIT_FAILURE);
-    }
-
-	/* clean buf */
-	memset(&buf, 0, BUF_SIZE);
-	/* Close connection */
-	if (shutdown(sfd, SHUT_RD) == -1) {
-		perror("shutdown");
-		exit(EXIT_FAILURE);
-	}
-
-    nread = read_sock(sfd, buf, BUF_SIZE);
-    if (nread == -1) {
-        perror("read");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Received %zd bytes: %s\n", nread, buf);
-
-	/* Close sfd */
-	if (close(sfd) == -1) {
-		perror("close");
-		exit(EXIT_FAILURE);
-	}
-
-    exit(EXIT_SUCCESS);
+int sendData(FILE *target, const char *key, const char *payload) {
+    fprintf(target, "%s", key);
+    fprintf(target, "%s", payload);
+    fprintf(target, "\n");
+    fflush(target);
+    
+    return 1;
 }
 
 
@@ -171,37 +129,3 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode) {
     exit(exitcode);
 }
 
-/* copy & paste aus dem buch kapitel */
-ssize_t write_sock(int fd, const void *puffer, size_t n) {
-	size_t      verbleiben = n;
-	ssize_t     geschrieben;
-	const char *zgr = puffer;
-	while (verbleiben > 0) { /* schreibt n Bytes nach fd */
-		if ( (geschrieben = write(fd, zgr, verbleiben)) <= 0) {
-			if (errno == EINTR)
-				geschrieben = 0;  /* neuer write-Versuch */
-			else
-				fprintf(stderr, "write_sock-Fehler");
-		}
-		verbleiben -= geschrieben;
-		zgr        += geschrieben;
-	}
-	return n;
-}
-ssize_t read_sock(int fd, void *puffer, size_t n) {
-	size_t   verbleiben = n;
-	ssize_t  gelesen;
-	char    *zgr = puffer;
-	while (verbleiben > 0) { /* liest n Bytes von fd */
-		if ( (gelesen = read(fd, zgr, verbleiben)) < 0) {
-			if (errno == EINTR)
-				gelesen = 0;  /* neuer read-Versuch */
-			else
-				fprintf(stderr, "read_sock-Fehler");
-		} else if (gelesen == 0)
-			break; /* EOF */
-			verbleiben -= gelesen;
-			zgr        += gelesen;
-	}
-	return n-verbleiben;
-}
