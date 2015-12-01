@@ -134,6 +134,7 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
 
+	printf("Message: %s", buf);
     if ((write_sock(sfd, &buf, sizeof(buf))) != sizeof(buf)) {
         fprintf(stderr, "partial/failed write\n");
         exit(EXIT_FAILURE);
