@@ -22,6 +22,8 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode);
 
 
 int sendData(FILE *target, const char *key, const char *payload);
+int checkServerResponseStatus(FILE *source);
+int writeOutputToFile(FILE *source);
 
 int main(int argc, const char * argv[]) {
     /*
@@ -108,6 +110,20 @@ int main(int argc, const char * argv[]) {
     
     FILE *fromServer = fdopen(backupOfSfd, "r");
     
+    /* read line for status=... */
+    /* if status returned from server != 0 then exit using the status */
+    int status = 0;
+    if ((status = checkServerResponseStatus(fromServer)) != 0) {
+        /* TODO: cleanup */
+        exit(status);
+    }
+    
+    int done = 0;
+    do {
+        done = writeOutputToFile(fromServer);
+    } while (! done);
+    
+    
     fclose(fromServer);
     close(backupOfSfd);
 }
@@ -120,6 +136,32 @@ int sendData(FILE *target, const char *key, const char *payload) {
     fflush(target);
     
     return 1;
+}
+
+int checkServerResponseStatus(FILE *source) {
+    /* read line from source */
+    /* compare n chars with status=0 */
+    char *line = NULL;
+    char *key = NULL;
+    size_t sizeOfLine = 0;
+    int value = 0;
+
+    getline(&line, &sizeOfLine, source);
+    
+    sscanf(line, "%s=%d", key, &value);
+    free(line);
+    
+    return value;
+}
+
+int writeOutputToFile(FILE *source) {
+    /* check for EOF */
+    /* read line file=.... */
+    /* read line len=.... */
+    /* check if bytes read < or > len */
+    /* read bytes until remaining len = 0 */
+    
+    return 0;
 }
 
 
