@@ -224,7 +224,7 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
         }
     }
     
-    found = sscanf(line, "len=%zu", value);
+    found = sscanf(line, "len=%lu", value);
     if (found == 0 || found == EOF) {
         fprintf(stderr, "pattern 'len=<lenght>' not found\n");
         free(line);
@@ -262,22 +262,23 @@ int writeFiles(FILE *source) {
     size_t bytesAvailable = 0;
     size_t bytesWritten = 0;
     size_t bytesTransferred = 0;
-    size_t bufferSize = 256;
-    int buffer[bufferSize];
+    size_t bufferSize = 1;
+    int buffer;
     
-    while ((bytesAvailable = fread(buffer, (size_t)sizeof(int), bufferSize, source)) > 0) {
+    while ((bytesAvailable = fread(&buffer, (size_t)sizeof(int), bufferSize, source)) > 0) {
         
-        bytesWritten = fwrite(buffer, (size_t)sizeof(int), bytesAvailable, outputFile);
+        bytesWritten = fwrite(&buffer, (size_t)sizeof(int), bytesAvailable, outputFile);
         if (bytesAvailable != bytesWritten) {
             fprintf(stderr, "failed writing %zu bytes to file\n", bytesAvailable);
             fclose(outputFile);
             return ERROR;
         }
         bytesTransferred += bytesWritten;
-        if (bytesTransferred > fileLength) {
-            fprintf(stderr, "bytes sent exceeds allowed length");
+        printf("transferred %zu of %lu bytes\n", bytesTransferred, fileLength);
+        if (bytesTransferred == fileLength) {
+//            fprintf(stderr, "bytes sent exceeds allowed length");
             fclose(outputFile);
-            return ERROR;
+            return SUCCESS;
         }
     }
     
