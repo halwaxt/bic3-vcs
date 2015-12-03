@@ -108,7 +108,7 @@ int main(int argc, const char * argv[]) {
     
     int backupOfSfd = dup(sfd);
     
-    shutdown(sfd, SHUT_RD);
+    shutdown(sfd, SHUT_WR);
     /* destroys also sfd */
     fclose(target);
     
