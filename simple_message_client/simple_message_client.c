@@ -147,15 +147,23 @@ int checkServerResponseStatus(FILE *source) {
     /* read line from source */
     /* compare n chars with status=0 */
     char *line = NULL;
-    char *key = NULL;
     size_t sizeOfLine = 0;
     int value = 0;
 
-    getline(&line, &sizeOfLine, source);
+    errno = SUCCESS;
+    if (getline(&line, &sizeOfLine, source) < SUCCESS) {
+        if (errno == EINVAL || errno == EOVERFLOW) {
+            free(line);
+            return ERROR;
+        }
+    }
     
-    sscanf(line, "%s=%d", key, &value);
+    if (sscanf(line, "status=%d", &value) <= SUCCESS) {
+        free(line);
+        return ERROR;
+    }
+    
     free(line);
-    
     return value;
 }
 
@@ -176,6 +184,7 @@ int getOutputFileName(FILE *source, char *value) {
         return ERROR;
     }
     
+    free(line);
     return SUCCESS;
 }
 
@@ -196,6 +205,7 @@ int getOutputFileLength(FILE *source, int *value) {
         return ERROR;
     }
     
+    free(line);
     return SUCCESS;
 }
 
@@ -208,7 +218,7 @@ int writeOutputToFile(FILE *source) {
     if (getOutputFileName(source, fileName) != SUCCESS) return ERROR;
     if (getOutputFileLength(source, &length) != SUCCESS) return ERROR;
     
-    printf("i'd write %d bytes to %s\n", length, fileName);
+    fprintf(stderr, "i'd write %d bytes to %s\n", length, fileName);
     
     
     /* check for EOF */
