@@ -113,7 +113,7 @@ int main(int argc, const char * argv[]) {
     }
     
     int canTransferFile = 1;
-    while (canTransferFile != SUCCESS) {
+    while (canTransferFile != DONE) {
         canTransferFile = transferFile(fromServer);
     }
     
@@ -144,17 +144,14 @@ int checkServerResponseStatus(FILE *source, int *status) {
         free(line);
         if (errno == EINVAL || errno == EOVERFLOW) {
             fprintf(stderr, "getline failed\n");
-//            free(line);
             return ERROR;
         }
         else {
             /* must be EOF */
-  //          free(line);
             return DONE;
         }
     }
 
-    printf("received from server: %s\n", line);
     found = sscanf(line, "status=%d", status);
     if (found == 0 || found == EOF) {
         fprintf(stderr, "pattern status=<status> not found\n");
@@ -177,7 +174,6 @@ int getOutputFileName(FILE *source, char **value) {
         free(line);
         if (errno == EINVAL || errno == EOVERFLOW) {
             fprintf(stderr, "getline failed\n");
-//            free(line);
             return ERROR;
         }
         else {
@@ -185,8 +181,6 @@ int getOutputFileName(FILE *source, char **value) {
             return DONE;
         }
     }
-    
-    printf("received line: %s\n", line);
     
     fileName = malloc(sizeof(char) * strlen(line));
     fileName[0] = '\0';
@@ -203,7 +197,6 @@ int getOutputFileName(FILE *source, char **value) {
         return ERROR;
     }
     
-    printf("the filename is %s\n", fileName);
     *value = fileName;
     return SUCCESS;
 }
@@ -244,7 +237,7 @@ int transferFile(FILE *source) {
     if ((result = getOutputFileLength(source, &fileLength)) != SUCCESS) return result;
     
     errno = SUCCESS;
-    int outputFileDescriptor = open(fileName,  O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    int outputFileDescriptor = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, 0664);
     if (outputFileDescriptor == ERROR) {
         free(fileName);
         return ERROR;
