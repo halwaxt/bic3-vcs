@@ -263,11 +263,11 @@ int writeFiles(FILE *source) {
     size_t bytesWritten = 0;
     size_t bytesTransferred = 0;
     size_t bufferSize = 1;
-    int buffer;
+    char buffer;
     
-    while ((bytesAvailable = fread(&buffer, (size_t)sizeof(int), bufferSize, source)) > 0) {
+    while ((bytesAvailable = fread(&buffer, (size_t)sizeof(char), bufferSize, source)) > 0) {
         
-        bytesWritten = fwrite(&buffer, (size_t)sizeof(int), bytesAvailable, outputFile);
+        bytesWritten = fwrite(&buffer, (size_t)sizeof(char), bytesAvailable, outputFile);
         if (bytesAvailable != bytesWritten) {
             fprintf(stderr, "failed writing %zu bytes to file\n", bytesAvailable);
             fclose(outputFile);
