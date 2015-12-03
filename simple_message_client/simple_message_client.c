@@ -153,12 +153,16 @@ int checkServerResponseStatus(FILE *source) {
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         if (errno == EINVAL || errno == EOVERFLOW) {
+            fprintf(stderr, "getline failed\n");
             free(line);
             return ERROR;
         }
     }
+
+    printf("received from server: %s\n", line);
     
     if (sscanf(line, "status=%d", &value) <= SUCCESS) {
+        fprintf(stderr, "sscanf failed\n");
         free(line);
         return ERROR;
     }
