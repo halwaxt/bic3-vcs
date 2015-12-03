@@ -178,12 +178,16 @@ int getOutputFileName(FILE *source, char *value) {
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         if (errno == EINVAL || errno == EOVERFLOW) {
+            fprintf(stderr, "getline failed\n");
             free(line);
             return ERROR;
         }
     }
     
+    printf("received line: %s\n", line);
+    
     if (sscanf(line, "file=%s", value) <= SUCCESS) {
+        fprintf(stderr, "sscanf failed\n");
         free(line);
         return ERROR;
     }
@@ -199,12 +203,14 @@ int getOutputFileLength(FILE *source, int *value) {
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         if (errno == EINVAL || errno == EOVERFLOW) {
+            fprintf(stderr, "getline failed\n");
             free(line);
             return ERROR;
         }
     }
     
     if (sscanf(line, "len=%d", value) <= SUCCESS) {
+        fprintf(stderr, "sscanf failed\n");
         free(line);
         return ERROR;
     }
