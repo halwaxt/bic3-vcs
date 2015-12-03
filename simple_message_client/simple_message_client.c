@@ -108,7 +108,8 @@ int main(int argc, const char * argv[]) {
     
     if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
         fprintf(stderr, "reading server response failed with error %d\n", status);
-        /* TODO: cleanup */
+        fclose(fromServer);
+        close(backupOfSfd);
         exit(status);
     }
     
