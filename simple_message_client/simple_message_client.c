@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 #include "simple_message_client_commandline_handling.h"
 
 #define ERROR -1
@@ -25,8 +26,8 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode);
 
 int sendData(FILE *target, const char *key, const char *payload);
 int checkServerResponseStatus(FILE *source, int *status);
-int writeOutputToFile(FILE *source);
-int getOutputFileLength(FILE *source, int *value);
+int writeFiles(FILE *source);
+int getOutputFileLength(FILE *source, unsigned long *value);
 int getOutputFileName(FILE *source, char **value);
 
 int main(int argc, const char * argv[]) {
@@ -99,18 +100,18 @@ int main(int argc, const char * argv[]) {
 
     freeaddrinfo(result);           /* No longer needed */
 
-    FILE *target = fdopen(sfd, "w");
+    FILE *toServer = fdopen(sfd, "w");
     
-    sendData(target, "user=", user);
-    sendData(target, "", message);
+    sendData(toServer, "user=", user);
+    sendData(toServer, "", message);
     
-    /* fclose schließt auch sfd, daher vorher ein DUP2 */
+    /* fclose schließt auch sfd, daher vorher ein dup */
     
     int backupOfSfd = dup(sfd);
     
     shutdown(sfd, SHUT_WR);
     /* destroys also sfd */
-    fclose(target);
+    fclose(toServer);
     
     FILE *fromServer = fdopen(backupOfSfd, "r");
     
@@ -126,7 +127,7 @@ int main(int argc, const char * argv[]) {
     
     int done = 0;
     do {
-        done = writeOutputToFile(fromServer);
+        done = writeFiles(fromServer);
     } while (! done);
     
     
@@ -190,7 +191,7 @@ int getOutputFileName(FILE *source, char **value) {
     printf("received line: %s\n", line);
     
     fileName = malloc(sizeof(char) * strlen(line));
-    value[0] = '\0';
+    fileName[0] = '\0';
     if (sscanf(line, "file=%s", fileName) == EOF) {
         fprintf(stderr, "pattern 'file=<filename>' not found\n");
         free(line);
@@ -209,7 +210,7 @@ int getOutputFileName(FILE *source, char **value) {
     return SUCCESS;
 }
 
-int getOutputFileLength(FILE *source, int *value) {
+int getOutputFileLength(FILE *source, unsigned long *value) {
     char *line = NULL;
     size_t sizeOfLine = 0;
     int found = 0;
@@ -223,7 +224,7 @@ int getOutputFileLength(FILE *source, int *value) {
         }
     }
     
-    found = sscanf(line, "len=%d", value);
+    found = sscanf(line, "len=%zu", value);
     if (found == 0 || found == EOF) {
         fprintf(stderr, "pattern 'len=<lenght>' not found\n");
         free(line);
@@ -236,14 +237,55 @@ int getOutputFileLength(FILE *source, int *value) {
 
 
 
-int writeOutputToFile(FILE *source) {
+int writeFiles(FILE *source) {
     char *fileName = NULL;
-    int length = 0;
+    unsigned long fileLength = 0;
     
     if (getOutputFileName(source, &fileName) != SUCCESS) return ERROR;
-    if (getOutputFileLength(source, &length) != SUCCESS) return ERROR;
+    if (getOutputFileLength(source, &fileLength) != SUCCESS) return ERROR;
     
-    fprintf(stderr, "i'd write %d bytes to %s\n", length, fileName);
+    fprintf(stderr, "i'd write %lu bytes to %s\n", fileLength, fileName);
+    
+    errno = SUCCESS;
+    int outputFileDescriptor = open(fileName,  O_WRONLY | O_CREAT | O_TRUNC);
+    if (outputFileDescriptor == ERROR) {
+        free(fileName);
+        return ERROR;
+    }
+    
+    free(fileName);
+    FILE *outputFile = fdopen(outputFileDescriptor, "w");
+    if (outputFile == NULL) {
+        return ERROR;
+    }
+
+    size_t bytesAvailable = 0;
+    size_t bytesWritten = 0;
+    size_t bytesTransferred = 0;
+    size_t bufferSize = 256;
+    int buffer[bufferSize];
+    
+    while ((bytesAvailable = fread(buffer, (size_t)sizeof(int), bufferSize, source)) > 0) {
+        
+        bytesWritten = fwrite(buffer, (size_t)sizeof(int), bytesAvailable, outputFile);
+        if (bytesAvailable != bytesWritten) {
+            fprintf(stderr, "failed writing %zu bytes to file\n", bytesAvailable);
+            fclose(outputFile);
+            return ERROR;
+        }
+        bytesTransferred += bytesWritten;
+        if (bytesTransferred > fileLength) {
+            fprintf(stderr, "bytes sent exceeds allowed length");
+            fclose(outputFile);
+            return ERROR;
+        }
+    }
+    
+    fclose(outputFile);
+    if (bytesTransferred < fileLength) {
+        fprintf(stderr, "missing bytes! received %zu out of %lu\n", bytesTransferred, fileLength);
+        return ERROR;
+    }
     
     
     /* check for EOF */
@@ -252,7 +294,7 @@ int writeOutputToFile(FILE *source) {
     /* check if bytes read < or > len */
     /* read bytes until remaining len = 0 */
     
-    return 0;
+    return SUCCESS;
 }
 
 
