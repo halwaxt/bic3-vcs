@@ -19,14 +19,14 @@
 
 #define ERROR -1
 #define SUCCESS 0
-#define BUF_SIZE 6000 /* Examples in protocol analysis were about 4500 bytes */
+#define DONE 2
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
 
 
 int sendData(FILE *target, const char *key, const char *payload);
 int checkServerResponseStatus(FILE *source, int *status);
-int writeFiles(FILE *source);
+int transferFile(FILE *source);
 int getOutputFileLength(FILE *source, unsigned long *value);
 int getOutputFileName(FILE *source, char **value);
 
@@ -43,24 +43,11 @@ int main(int argc, const char * argv[]) {
     int verbose;
 
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
-    printf("All params parsed correctly\n");
-
-    /* ToDos:
-     * Create connection to server
-     * Send message
-     * wait for reply
-     *
-     * see man getaddrinfo
-     */
 
     struct addrinfo hints;
     struct addrinfo *result, *rp;
-//    int sfd, s, j;
     int sfd = -1;
     int s = -1;
-//    size_t len;
-    //ssize_t nread;
-    //char buf[BUF_SIZE];
 
     /* Obtain address(es) matching host/port */
 
@@ -125,11 +112,10 @@ int main(int argc, const char * argv[]) {
         exit(status);
     }
     
-    int done = 0;
-    do {
-        done = writeFiles(fromServer);
-    } while (! done);
-    
+    int canTransferFile = 1;
+    while (canTransferFile != SUCCESS) {
+        canTransferFile = transferFile(fromServer);
+    }
     
     fclose(fromServer);
     close(backupOfSfd);
@@ -151,13 +137,20 @@ int checkServerResponseStatus(FILE *source, int *status) {
     char *line = NULL;
     size_t sizeOfLine = 0;
     int found = 0;
+    
 
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
+        free(line);
         if (errno == EINVAL || errno == EOVERFLOW) {
             fprintf(stderr, "getline failed\n");
-            free(line);
+//            free(line);
             return ERROR;
+        }
+        else {
+            /* must be EOF */
+  //          free(line);
+            return DONE;
         }
     }
 
@@ -181,10 +174,15 @@ int getOutputFileName(FILE *source, char **value) {
     
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
+        free(line);
         if (errno == EINVAL || errno == EOVERFLOW) {
             fprintf(stderr, "getline failed\n");
-            free(line);
+//            free(line);
             return ERROR;
+        }
+        else {
+            /* EOF */
+            return DONE;
         }
     }
     
@@ -237,17 +235,16 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
 
 
 
-int writeFiles(FILE *source) {
+int transferFile(FILE *source) {
     char *fileName = NULL;
     unsigned long fileLength = 0;
+    int result = 0;
     
-    if (getOutputFileName(source, &fileName) != SUCCESS) return ERROR;
-    if (getOutputFileLength(source, &fileLength) != SUCCESS) return ERROR;
-    
-    fprintf(stderr, "i'd write %lu bytes to %s\n", fileLength, fileName);
+    if ((result = getOutputFileName(source, &fileName)) != SUCCESS) return result;
+    if ((result = getOutputFileLength(source, &fileLength)) != SUCCESS) return result;
     
     errno = SUCCESS;
-    int outputFileDescriptor = open(fileName,  O_WRONLY | O_CREAT | O_TRUNC);
+    int outputFileDescriptor = open(fileName,  O_WRONLY | O_CREAT | O_TRUNC, 0664);
     if (outputFileDescriptor == ERROR) {
         free(fileName);
         return ERROR;
@@ -274,9 +271,7 @@ int writeFiles(FILE *source) {
             return ERROR;
         }
         bytesTransferred += bytesWritten;
-        printf("transferred %zu of %lu bytes\n", bytesTransferred, fileLength);
         if (bytesTransferred == fileLength) {
-//            fprintf(stderr, "bytes sent exceeds allowed length");
             fclose(outputFile);
             return SUCCESS;
         }
@@ -287,14 +282,7 @@ int writeFiles(FILE *source) {
         fprintf(stderr, "missing bytes! received %zu out of %lu\n", bytesTransferred, fileLength);
         return ERROR;
     }
-    
-    
-    /* check for EOF */
-    /* read line file=.... */
-    /* read line len=.... */
-    /* check if bytes read < or > len */
-    /* read bytes until remaining len = 0 */
-    
+
     return SUCCESS;
 }
 
