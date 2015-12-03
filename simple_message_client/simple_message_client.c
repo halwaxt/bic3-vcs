@@ -175,7 +175,7 @@ int checkServerResponseStatus(FILE *source, int *status) {
 int getOutputFileName(FILE *source, char *value) {
     char *line = NULL;
     size_t sizeOfLine = 0;
-    int found = 0;
+
     
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
@@ -189,14 +189,21 @@ int getOutputFileName(FILE *source, char *value) {
     printf("received line: %s\n", line);
     
     value = malloc(sizeof(char) * strlen(line));
-    found = sscanf(line, "file=%s", value);
-    if (found == 0 || found == EOF) {
+    value[0] = '\0';
+    if (sscanf(line, "file=%s", value) == EOF) {
         fprintf(stderr, "pattern 'file=<filename>' not found\n");
         free(line);
         return ERROR;
     }
-    printf("the filename is %s\n", value);
+    
     free(line);
+    
+    if (strlen(value) == 0) {
+        fprintf(stderr, "pattern 'file=<filename>' not found\n");
+        return ERROR;
+    }
+    
+    printf("the filename is %s\n", value);
     return SUCCESS;
 }
 
