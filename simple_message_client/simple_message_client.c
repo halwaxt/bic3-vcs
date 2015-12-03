@@ -188,13 +188,14 @@ int getOutputFileName(FILE *source, char *value) {
     
     printf("received line: %s\n", line);
     
+    value = malloc(sizeof(char) * strlen(line));
     found = sscanf(line, "file=%s", value);
     if (found == 0 || found == EOF) {
         fprintf(stderr, "pattern 'file=<filename>' not found\n");
         free(line);
         return ERROR;
     }
-    
+    printf("the filename is %s\n", value);
     free(line);
     return SUCCESS;
 }
