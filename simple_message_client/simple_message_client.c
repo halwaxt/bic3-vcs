@@ -24,7 +24,7 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode);
 
 
 int sendData(FILE *target, const char *key, const char *payload);
-int checkServerResponseStatus(FILE *source);
+int checkServerResponseStatus(FILE *source, int *status);
 int writeOutputToFile(FILE *source);
 int getOutputFileLength(FILE *source, int *value);
 int getOutputFileName(FILE *source, char *value);
@@ -116,9 +116,10 @@ int main(int argc, const char * argv[]) {
     
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
-    int status = checkServerResponseStatus(fromServer);
-    if (status != 0) {
-        fprintf(stderr, "return status from server is %d\n", status);
+    int status = ERROR;
+    
+    if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
+        fprintf(stderr, "reading server response failed with error %d\n", status);
         /* TODO: cleanup */
         exit(status);
     }
@@ -143,12 +144,12 @@ int sendData(FILE *target, const char *key, const char *payload) {
     return 1;
 }
 
-int checkServerResponseStatus(FILE *source) {
+int checkServerResponseStatus(FILE *source, int *status) {
     /* read line from source */
     /* compare n chars with status=0 */
     char *line = NULL;
     size_t sizeOfLine = 0;
-    int value = 0;
+    int found = 0;
 
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
@@ -160,20 +161,21 @@ int checkServerResponseStatus(FILE *source) {
     }
 
     printf("received from server: %s\n", line);
-    
-    if (sscanf(line, "status=%d", &value) <= SUCCESS) {
-        fprintf(stderr, "sscanf failed\n");
+    found = sscanf(line, "status=%d", status);
+    if (found == 0 || found == EOF) {
+        fprintf(stderr, "pattern status=<status> not found\n");
         free(line);
         return ERROR;
     }
     
     free(line);
-    return value;
+    return SUCCESS;
 }
 
 int getOutputFileName(FILE *source, char *value) {
     char *line = NULL;
     size_t sizeOfLine = 0;
+    int found = 0;
     
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
@@ -186,8 +188,9 @@ int getOutputFileName(FILE *source, char *value) {
     
     printf("received line: %s\n", line);
     
-    if (sscanf(line, "file=%s", value) <= SUCCESS) {
-        fprintf(stderr, "sscanf failed\n");
+    found = sscanf(line, "file=%s", value);
+    if (found == 0 || found == EOF) {
+        fprintf(stderr, "pattern 'file=<filename>' not found\n");
         free(line);
         return ERROR;
     }
@@ -199,6 +202,7 @@ int getOutputFileName(FILE *source, char *value) {
 int getOutputFileLength(FILE *source, int *value) {
     char *line = NULL;
     size_t sizeOfLine = 0;
+    int found = 0;
     
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
@@ -209,8 +213,9 @@ int getOutputFileLength(FILE *source, int *value) {
         }
     }
     
-    if (sscanf(line, "len=%d", value) <= SUCCESS) {
-        fprintf(stderr, "sscanf failed\n");
+    found = sscanf(line, "len=%d", value);
+    if (found == 0 || found == EOF) {
+        fprintf(stderr, "pattern 'len=<lenght>' not found\n");
         free(line);
         return ERROR;
     }
