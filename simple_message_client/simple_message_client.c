@@ -116,8 +116,9 @@ int main(int argc, const char * argv[]) {
     
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
-    int status = 0;
-    if ((status = checkServerResponseStatus(fromServer)) != 0) {
+    int status = checkServerResponseStatus(fromServer);
+    if (status != 0) {
+        fprintf(stderr, "return status from server is %d\n", status);
         /* TODO: cleanup */
         exit(status);
     }
