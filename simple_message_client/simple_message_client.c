@@ -16,6 +16,8 @@
 #include <string.h>
 #include "simple_message_client_commandline_handling.h"
 
+#define ERROR -1
+#define SUCCESS 0
 #define BUF_SIZE 6000 /* Examples in protocol analysis were about 4500 bytes */
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
@@ -24,6 +26,8 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode);
 int sendData(FILE *target, const char *key, const char *payload);
 int checkServerResponseStatus(FILE *source);
 int writeOutputToFile(FILE *source);
+int getOutputFileLength(FILE *source, int *value);
+int getOutputFileName(FILE *source, char *value);
 
 int main(int argc, const char * argv[]) {
     /*
@@ -154,7 +158,58 @@ int checkServerResponseStatus(FILE *source) {
     return value;
 }
 
+int getOutputFileName(FILE *source, char *value) {
+    char *line = NULL;
+    size_t sizeOfLine = 0;
+    
+    errno = SUCCESS;
+    if (getline(&line, &sizeOfLine, source) < SUCCESS) {
+        if (errno == EINVAL || errno == EOVERFLOW) {
+            free(line);
+            return ERROR;
+        }
+    }
+    
+    if (sscanf(line, "file=%s", value) <= SUCCESS) {
+        free(line);
+        return ERROR;
+    }
+    
+    return SUCCESS;
+}
+
+int getOutputFileLength(FILE *source, int *value) {
+    char *line = NULL;
+    size_t sizeOfLine = 0;
+    
+    errno = SUCCESS;
+    if (getline(&line, &sizeOfLine, source) < SUCCESS) {
+        if (errno == EINVAL || errno == EOVERFLOW) {
+            free(line);
+            return ERROR;
+        }
+    }
+    
+    if (sscanf(line, "len=%d", value) <= SUCCESS) {
+        free(line);
+        return ERROR;
+    }
+    
+    return SUCCESS;
+}
+
+
+
 int writeOutputToFile(FILE *source) {
+    char *fileName = NULL;
+    int length = 0;
+    
+    if (getOutputFileName(source, fileName) != SUCCESS) return ERROR;
+    if (getOutputFileLength(source, &length) != SUCCESS) return ERROR;
+    
+    printf("i'd write %d bytes to %s\n", length, fileName);
+    
+    
     /* check for EOF */
     /* read line file=.... */
     /* read line len=.... */
