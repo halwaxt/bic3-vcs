@@ -30,6 +30,8 @@ int transferFile(FILE *source);
 int getOutputFileLength(FILE *source, unsigned long *value);
 int getOutputFileName(FILE *source, char **value);
 
+static const char *programName;
+
 int main(int argc, const char * argv[]) {
     /*
      simple_message_client  -s server -p port -u user [-i image URL] -m mes-
@@ -42,6 +44,8 @@ int main(int argc, const char * argv[]) {
     const char *message;
     int verbose;
 
+    programName = argv[0];
+    
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
 
     struct addrinfo hints;
@@ -59,7 +63,7 @@ int main(int argc, const char * argv[]) {
 
     s = getaddrinfo(server, port, &hints, &result);
     if (s != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(s));
+        fprintf(stderr, "%s: getaddrinfo: %s\n", programName, gai_strerror(s));
         exit(EXIT_FAILURE);
     }
 
@@ -81,16 +85,32 @@ int main(int argc, const char * argv[]) {
     }
 
     if (rp == NULL) {               /* No address succeeded */
-        fprintf(stderr, "Could not connect\n");
+        fprintf(stderr, "%s: Could not connect\n", programName);
         exit(EXIT_FAILURE);
     }
 
     freeaddrinfo(result);           /* No longer needed */
 
+    errno = SUCCESS;
     FILE *toServer = fdopen(sfd, "w");
+    if (toServer == NULL) {
+        perror(programName);
+        shutdown(sfd, SHUT_RDWR);
+        exit(errno);
+    }
     
-    sendData(toServer, "user=", user);
-    sendData(toServer, "", message);
+    if (sendData(toServer, "user=", user) == ERROR) {
+        perror(programName);
+        shutdown(sfd, SHUT_RDWR);
+        fclose(toServer);
+        exit(errno);
+    }
+    if (sendData(toServer, "", message) == ERROR) {
+        perror(programName);
+        shutdown(sfd, SHUT_RDWR);
+        fclose(toServer);
+        exit(errno);
+    }
     
     /* fclose schließt auch sfd, daher vorher ein dup */
     
@@ -101,13 +121,18 @@ int main(int argc, const char * argv[]) {
     fclose(toServer);
     
     FILE *fromServer = fdopen(backupOfSfd, "r");
+    if (fromServer == NULL) {
+        perror(programName);
+        close(backupOfSfd);
+        exit(errno);
+    }
     
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
     int status = ERROR;
     
     if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
-        fprintf(stderr, "reading server response failed with error %d\n", status);
+        fprintf(stderr, "%s: reading server response failed with error %d\n", programName, status);
         fclose(fromServer);
         close(backupOfSfd);
         exit(status);
@@ -130,12 +155,12 @@ int main(int argc, const char * argv[]) {
 
 
 int sendData(FILE *target, const char *key, const char *payload) {
-    fprintf(target, "%s", key);
-    fprintf(target, "%s", payload);
-    fprintf(target, "\n");
-    fflush(target);
+    if (fprintf(target, "%s", key) < 0) return ERROR;
+    if (fprintf(target, "%s", payload) < 0) return ERROR;
+    if (fprintf(target, "\n") < 0) return ERROR;
+    if (fflush(target) == EOF) return ERROR;
     
-    return 1;
+    return SUCCESS;
 }
 
 int checkServerResponseStatus(FILE *source, int *status) {
@@ -190,6 +215,10 @@ int getOutputFileName(FILE *source, char **value) {
     }
     
     fileName = malloc(sizeof(char) * strlen(line));
+    if (fileName == NULL) {
+        free(line);
+        return ERROR;
+    }
     fileName[0] = '\0';
     if (sscanf(line, "file=%s", fileName) == EOF) {
         fprintf(stderr, "pattern 'file=<filename>' not found\n");
