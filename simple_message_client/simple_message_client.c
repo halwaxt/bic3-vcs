@@ -113,13 +113,19 @@ int main(int argc, const char * argv[]) {
         exit(status);
     }
     
-    int canTransferFile = 1;
+    int canTransferFile = SUCCESS;
     while (canTransferFile != DONE) {
         canTransferFile = transferFile(fromServer);
+        if (canTransferFile == ERROR) {
+            fclose(fromServer);
+            close(backupOfSfd);
+            exit(EXIT_FAILURE);
+        }
     }
     
     fclose(fromServer);
     close(backupOfSfd);
+    exit(EXIT_SUCCESS);
 }
 
 
