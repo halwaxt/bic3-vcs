@@ -105,6 +105,16 @@ int main(int argc, const char * argv[]) {
         fclose(toServer);
         exit(errno);
     }
+    
+    if (image_url != NULL) {
+        if (sendData(toServer, "img=", image_url) == ERROR) {
+            perror(programName);
+            shutdown(sfd, SHUT_RDWR);
+            fclose(toServer);
+            exit(errno);
+        }
+    }
+    
     if (sendData(toServer, "", message) == ERROR) {
         perror(programName);
         shutdown(sfd, SHUT_RDWR);
@@ -222,6 +232,7 @@ int getOutputFileName(FILE *source, char **value) {
     fileName[0] = '\0';
     if (sscanf(line, "file=%s", fileName) == EOF) {
         fprintf(stderr, "pattern 'file=<filename>' not found\n");
+        free(fileName);
         free(line);
         return ERROR;
     }
@@ -230,6 +241,7 @@ int getOutputFileName(FILE *source, char **value) {
     
     if (strlen(fileName) == 0) {
         fprintf(stderr, "pattern 'file=<filename>' not found\n");
+        free(fileName);
         return ERROR;
     }
     
@@ -261,8 +273,6 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
     free(line);
     return SUCCESS;
 }
-
-
 
 int transferFile(FILE *source) {
     char *fileName = NULL;
@@ -317,7 +327,6 @@ int transferFile(FILE *source) {
 
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode) {
-    fprintf(stream, "%s: %s\n\n", cmnd, "invalid params");
     fprintf(stream, "%s: %s\n", cmnd, "-s server -p port -u user [-i image URL] -m message [-v] [-h]");
     exit(exitcode);
 }
