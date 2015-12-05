@@ -165,7 +165,7 @@ int connetToServer(const char *server, const char *port, int *socketDescriptor) 
         return ERROR;
     }
     
-    socketDescriptor = &sfd;
+    *socketDescriptor = sfd;
     return SUCCESS;
 
 }
