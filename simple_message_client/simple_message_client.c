@@ -22,8 +22,7 @@
 #define SUCCESS 0
 #define DONE 2
 
-#define log_info(fmt, ...) do { if (verbose) fprintf(stdout, "%s [%s:%d]" fmt "\n", programName, __FILE__, __LINE__, ##__VA_ARGS__); } while (0)
-
+#define log_info(M, ...) fprintf(stderr, "[INFO] (%s:%d) " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
 int write_formatted(const char *formatted_string, ...);
