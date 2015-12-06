@@ -84,7 +84,7 @@ int main(int argc, const char * argv[]) {
         }
     }
     else {
-        log_info("skipping img=<image_url> parameter");
+        log_info("skipping %s parameter", "img=<image_url>");
     }
     
     log_info("sending message '%s'\n", message);
@@ -98,16 +98,16 @@ int main(int argc, const char * argv[]) {
     /* fclose schließt auch sfd, daher vorher ein dup */
     
     int backupOfSfd = dup(sfd);
-    log_info("shutting down file pointer for writing socket\n");
+    log_info("shutting down file pointer for writing socket\n", NULL);
     if (shutdown(sfd, SHUT_WR) != SUCCESS) {
         fprintf(stderr, "%s: shutDown() SHUT_WR for server connection failed: %s\n", programName, strerror(errno));
         fclose(toServer);
         exit(EXIT_FAILURE);
     }
-    log_info("closing writing socket\n");
+    log_info("closing writing socket\n", NULL);
     fclose(toServer);
     
-    log_info("opening reading socket\n");
+    log_info("opening reading socket\n", NULL);
     FILE *fromServer = fdopen(backupOfSfd, "r");
     if (fromServer == NULL) {
         fprintf(stderr, "%s: fdOpen() to read from server failed: %s\n", programName, strerror(errno));
@@ -117,7 +117,7 @@ int main(int argc, const char * argv[]) {
     
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
-    log_info("reading server response\n");
+    log_info("reading server response\n", NULL);
     int status = ERROR;
     if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
         fprintf(stderr, "%s: reading server response failed with error %d\n", programName, status);
@@ -126,7 +126,7 @@ int main(int argc, const char * argv[]) {
         exit(status);
     }
     
-    log_info("downloading files\n");
+    log_info("downloading files\n", NULL);
     int canTransferFile = SUCCESS;
     while (canTransferFile != DONE) {
         canTransferFile = transferFile(fromServer);
@@ -138,7 +138,7 @@ int main(int argc, const char * argv[]) {
         }
     }
     
-    log_info("shutting down reading socket\n");
+    log_info("shutting down reading socket\n", NULL);
     fclose(fromServer);
     close(backupOfSfd);
     exit(EXIT_SUCCESS);
