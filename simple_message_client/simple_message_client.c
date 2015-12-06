@@ -22,8 +22,11 @@
 #define SUCCESS 0
 #define DONE 2
 
+#define log_info(fmt, ...) do { if (verbose) fprintf(stdout, "%s [%s:%d]" fmt "\n", programName, __FILE__, __LINE__, ##__VA_ARGS__); } while (0)
+
+
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
-int write_formatted(const char *error_prefix, const char *formatted_string, ...);
+int write_formatted(const char *formatted_string, ...);
 
 int connetToServer(const char *server, const char *port, int *socketDescriptor);
 int sendData(FILE *target, const char *key, const char *payload);
@@ -47,11 +50,14 @@ int main(int argc, const char * argv[]) {
     
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
 
+    log_info("command line args: server='%s', port='%s', user='%s', img_url='%s', message=%message'\n", server, port, user, message);
+    
     int sfd = 0;
     if (connetToServer(server, port, &sfd) != SUCCESS) {
         fprintf(stderr, "%s: connectToServer() failed for server %s and port %s: %s\n", programName,   server, port, strerror(errno));
         exit(errno);
     }
+    log_info("connected to %s:%s\n", server, port);
     
     errno = SUCCESS;
     FILE *toServer = fdopen(sfd, "w");
@@ -61,6 +67,7 @@ int main(int argc, const char * argv[]) {
         exit(errno);
     }
     
+    log_info("sending 'user=%s'\n", user);
     if (sendData(toServer, "user=", user) == ERROR) {
         fprintf(stderr, "%s: sendData() for param user=<user> failed: %s\n", programName, strerror(errno));
         shutdown(sfd, SHUT_RDWR);
@@ -69,6 +76,7 @@ int main(int argc, const char * argv[]) {
     }
     
     if (image_url != NULL) {
+        log_info("sending 'img=%s'\n", image_url);
         if (sendData(toServer, "img=", image_url) == ERROR) {
             fprintf(stderr, "%s: sendData() for param img=<image_url> failed: %s\n", programName, strerror(errno));
             shutdown(sfd, SHUT_RDWR);
@@ -76,7 +84,11 @@ int main(int argc, const char * argv[]) {
             exit(errno);
         }
     }
+    else {
+        log_info("skipping img=<image_url> parameter");
+    }
     
+    log_info("sending message '%s'\n", message);
     if (sendData(toServer, "", message) == ERROR) {
         fprintf(stderr, "%s: sendData() for message failed: %s\n", programName, strerror(errno));
         shutdown(sfd, SHUT_RDWR);
@@ -87,15 +99,16 @@ int main(int argc, const char * argv[]) {
     /* fclose schließt auch sfd, daher vorher ein dup */
     
     int backupOfSfd = dup(sfd);
-    
+    log_info("shutting down file pointer for writing socket\n");
     if (shutdown(sfd, SHUT_WR) != SUCCESS) {
         fprintf(stderr, "%s: shutDown() SHUT_WR for server connection failed: %s\n", programName, strerror(errno));
         fclose(toServer);
         exit(EXIT_FAILURE);
     }
-    
+    log_info("closing writing socket\n");
     fclose(toServer);
     
+    log_info("opening reading socket\n");
     FILE *fromServer = fdopen(backupOfSfd, "r");
     if (fromServer == NULL) {
         fprintf(stderr, "%s: fdOpen() to read from server failed: %s\n", programName, strerror(errno));
@@ -105,8 +118,8 @@ int main(int argc, const char * argv[]) {
     
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
+    log_info("reading server response\n");
     int status = ERROR;
-    
     if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
         fprintf(stderr, "%s: reading server response failed with error %d\n", programName, status);
         fclose(fromServer);
@@ -114,6 +127,7 @@ int main(int argc, const char * argv[]) {
         exit(status);
     }
     
+    log_info("downloading files\n");
     int canTransferFile = SUCCESS;
     while (canTransferFile != DONE) {
         canTransferFile = transferFile(fromServer);
@@ -125,6 +139,7 @@ int main(int argc, const char * argv[]) {
         }
     }
     
+    log_info("shutting down reading socket\n");
     fclose(fromServer);
     close(backupOfSfd);
     exit(EXIT_SUCCESS);
@@ -174,6 +189,7 @@ int connetToServer(const char *server, const char *port, int *socketDescriptor) 
         return ERROR;
     }
     
+    freeaddrinfo(rp);
     *socketDescriptor = sfd;
     return SUCCESS;
 
@@ -261,7 +277,7 @@ int getOutputFileName(FILE *source, char **value) {
         free(fileName);
         return ERROR;
     }
-    
+    log_info("output file name is %s\n", fileName);
     *value = fileName;
     return SUCCESS;
 }
@@ -286,8 +302,8 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
         free(line);
         return ERROR;
     }
-    
     free(line);
+    log_info("ouput file size is %lu bytes\n", *value);
     return SUCCESS;
 }
 
@@ -300,6 +316,7 @@ int transferFile(FILE *source) {
     if ((result = getOutputFileLength(source, &fileLength)) != SUCCESS) return result;
     
     errno = SUCCESS;
+    log_info("opening file %s for writing\n", fileName);
     int outputFileDescriptor = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, 0664);
     if (outputFileDescriptor == ERROR) {
         fprintf(stderr, "%s: transferFile()/open() failed: %s\n", programName, strerror(errno));
@@ -330,11 +347,13 @@ int transferFile(FILE *source) {
         }
         bytesTransferred += bytesWritten;
         if (bytesTransferred == fileLength) {
+            log_info("transfered of %lu completed\n", fileLength);
             fclose(outputFile);
             return SUCCESS;
         }
     }
     
+    log_info("closing output file %s\n", fileName);
     fclose(outputFile);
     if (bytesTransferred < fileLength) {
         fprintf(stderr, "%s: missing bytes! received %zu out of %lu\n", programName, bytesTransferred, fileLength);
@@ -353,7 +372,7 @@ int transferFile(FILE *source) {
  * \retval return_code EXIT on failure
  * \retval return_code CONTÍNUE on success
  */
-int write_formatted(const char *error_prefix, const char *formatted_string, ...) {
+int write_formatted(const char *formatted_string, ...) {
     
     int return_code = SUCCESS;
     
@@ -361,7 +380,7 @@ int write_formatted(const char *error_prefix, const char *formatted_string, ...)
     
     va_start(args, formatted_string);
     if (vprintf(formatted_string, args) < 0) {
-        fprintf(stderr, "%s write_formatted(): %s\n", error_prefix, strerror(errno));
+        fprintf(stderr, "%s: write_formatted(): %s\n", programName, strerror(errno));
         return_code = ERROR;
     }
     va_end(args);
