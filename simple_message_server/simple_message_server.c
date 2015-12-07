@@ -23,7 +23,7 @@
 #define SUCCESS 0
 #define DONE 2
 
-void usage(void);
+void usage(const char *programName);
 
 static const char *programName;
 
@@ -37,6 +37,7 @@ static const char *programName;
 /*
    our child-handler. wait for all children to avoid zombies
  */
+/* TODO: WTF is signo? */
 void sigchld_handler(int signo)
 {
     int status;
@@ -58,6 +59,8 @@ void sigchld_handler(int signo)
 
 int main(int argc, const char * argv[]) {
 
+	programName = argv[0];
+
 	int opt = -1;
 	const char *port;
 
@@ -76,16 +79,18 @@ int main(int argc, const char * argv[]) {
 				port = optarg;
 				break;
 			default:
-				usage();
+				usage(programName);
 				exit(EXIT_FAILURE);	
 		}
 	}
 
+	/* TODO: getaddrinfo */
     /* Create Server-Socket */
     sfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sfd < 0)
     {
         perror("socket() error..");
+		close(sfd);
         exit(EXIT_FAILURE);
     }
 
@@ -107,6 +112,7 @@ int main(int argc, const char * argv[]) {
     if(listen(sfd, LISTENQ) < 0)
     {
         perror("listen() error..");
+        close(sfd);
         exit(EXIT_FAILURE);
     }
 
@@ -154,11 +160,12 @@ int main(int argc, const char * argv[]) {
             if( childpid  == 0 )
             {
                 close(sfd);
+				/* TODO: was starten wir? */
                 exit(handle_client(cfd));
             }
 
             /* continue our server-routine */
-            printf("Client has PID %i\n",childpid);
+            fprintf(stdout, "Client has PID %i\n",childpid);
 
             close(cfd);
     }
@@ -166,6 +173,6 @@ int main(int argc, const char * argv[]) {
     return EXIT_SUCCESS;
 }
 
-void usage(void) {
-	printf("foo");
+void usage(programName) {
+	fprintf(stdout, "%s: fooo", programName);
 }
