@@ -190,7 +190,7 @@ int sendData(FILE *target, const char *key, const char *payload) {
     if (fprintf(target, "%s", payload) < 0) return ERROR;
     if (fprintf(target, "\n") < 0) return ERROR;
     if (fflush(target) == EOF) return ERROR;
-    INFO("sendData()", "sent %lu bytes for key %s", strlen(payload), key);
+    INFO("sendData()", "sent key=value pair for key %s", key);
     return SUCCESS;
 }
 
