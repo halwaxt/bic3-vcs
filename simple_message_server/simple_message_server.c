@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netdb.h>
 #include <errno.h>
 #include <unistd.h>
@@ -22,7 +23,7 @@
 #define SUCCESS 0
 #define DONE 2
 
-void showUsage(FILE *stream, const char *cmnd, int exitcode);
+void usage(void);
 
 static const char *programName;
 
@@ -46,9 +47,9 @@ void sigchld_handler(int signo)
        WNOHANG tells the kernel not to block if there are no terminated
        child-processes.
      */
-    while( (pid = waitpid(-1,&status,WNOHANG)) > 0)
+    while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
     {
-        printf("%i exited with %i\n", pid, WEXITSTATUS(status));
+        fprintf(stdout, "%i exited with %i\n", pid, WEXITSTATUS(status));
     }
 
     return;
@@ -69,7 +70,7 @@ int main(int argc, const char * argv[]) {
     struct sigaction sa; /* for wait-child-handler */
 
 	/* Commandline parsen */
-	while ((opt = getopt(argc, argv, "p:h")) != -1) {
+	while ((opt = getopt(argc, (char ** const) argv, "p:h")) != -1) {
 		switch(opt) {
 			case 'p':
 				port = optarg;
@@ -91,7 +92,7 @@ int main(int argc, const char * argv[]) {
     /* Prepare our address-struct */
     memset(&myAddress, 0, sizeof(struct sockaddr_in));
     myAddress.sin_family = AF_INET;
-    myAddress.sin_port = htons(SERV_PORT); /* bind server to SERV_PORT */
+    myAddress.sin_port = htons(port); /* bind server to port */
     myAddress.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
 
     /* bind sockt to address + port */
@@ -163,4 +164,8 @@ int main(int argc, const char * argv[]) {
     }
 
     return EXIT_SUCCESS;
+}
+
+void usage(void) {
+	printf("foo");
 }
