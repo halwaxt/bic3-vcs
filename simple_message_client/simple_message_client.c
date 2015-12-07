@@ -22,6 +22,9 @@
 #define SUCCESS 0
 #define DONE 2
 
+#define INFO(function) \
+		fprintf(stdout, "%s [%s, %s, line %d]: ", programName, __FILE__, function, __LINE__)
+
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
 int write_formatted(const char *error_prefix, const char *formatted_string, ...);
 
@@ -46,6 +49,10 @@ int main(int argc, const char * argv[]) {
     programName = argv[0];
     
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
+	if (verbose) {
+		INFO("main()");
+		fprintf(stdout, "Using the following options: server=\"%s\", port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"\n", server, port, user, image_url, message);
+	}
 
     int sfd = 0;
     if (connectToServer(server, port, &sfd) != SUCCESS) {
