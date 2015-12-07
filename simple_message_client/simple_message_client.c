@@ -26,7 +26,6 @@
 		if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
-int write_formatted(const char *error_prefix, const char *formatted_string, ...);
 
 int connectToServer(const char *server, const char *port, int *socketDescriptor);
 int sendData(FILE *target, const char *key, const char *payload);
@@ -50,7 +49,7 @@ int main(int argc, const char * argv[]) {
     
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
     
-    INFO("main()", "Using the following options: server=\"%s\", port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"\n", server, port, user, image_url, message);
+    INFO("main()", "Using the following options: server=\"%s\", port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"", server, port, user, image_url, message);
 	
     int sfd = 0;
     if (connectToServer(server, port, &sfd) != SUCCESS) {
@@ -179,6 +178,7 @@ int connectToServer(const char *server, const char *port, int *socketDescriptor)
         return ERROR;
     }
     
+    INFO("connectToServer()", "obtained address %s, port number %s", server, port);
     *socketDescriptor = sfd;
     return SUCCESS;
 
@@ -190,7 +190,7 @@ int sendData(FILE *target, const char *key, const char *payload) {
     if (fprintf(target, "%s", payload) < 0) return ERROR;
     if (fprintf(target, "\n") < 0) return ERROR;
     if (fflush(target) == EOF) return ERROR;
-    
+    INFO("sendData()", "sent %lu bytes for key %s", strlen(payload), key);
     return SUCCESS;
 }
 
@@ -200,10 +200,9 @@ int checkServerResponseStatus(FILE *source, int *status) {
     char *line = NULL;
     size_t sizeOfLine = 0;
     int found = 0;
-    
 
     errno = SUCCESS;
-    if (getline(&line, &sizeOfLine, source) < SUCCESS) {
+    if (getline(&line, &sizeOfLine, source) != SUCCESS) {
         free(line);
         if (errno == EINVAL || errno == EOVERFLOW) {
         fprintf(stderr, "%s: checkServerResponseStatus()/getline() failed: %s\n", programName, strerror(errno));
@@ -211,6 +210,7 @@ int checkServerResponseStatus(FILE *source, int *status) {
         }
         else {
             /* must be EOF */
+            INFO("checkServerResponseStatus()", "found EOF %s", "");
             return DONE;
         }
     }
@@ -221,8 +221,9 @@ int checkServerResponseStatus(FILE *source, int *status) {
         free(line);
         return ERROR;
     }
-    
     free(line);
+    
+    INFO("checkServerResponseStatus()", "status=%d", *status);
     return SUCCESS;
 }
 
@@ -230,7 +231,6 @@ int getOutputFileName(FILE *source, char **value) {
     char *line = NULL;
     char *fileName = NULL;
     size_t sizeOfLine = 0;
-
     
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
@@ -241,6 +241,7 @@ int getOutputFileName(FILE *source, char **value) {
         }
         else {
             /* EOF */
+            INFO("getOutputFileName()", "found EOF %s", "");
             return DONE;
         }
     }
@@ -266,7 +267,8 @@ int getOutputFileName(FILE *source, char **value) {
         free(fileName);
         return ERROR;
     }
-    
+    INFO("getOutputFileName()", "found fileName %s", fileName);
+    /* memory gets freed in transferFile() */
     *value = fileName;
     return SUCCESS;
 }
@@ -279,9 +281,14 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         if (errno == EINVAL || errno == EOVERFLOW) {
-        fprintf(stderr, "%s: getOutputFileLength()/getline() failed: %s\n", programName, strerror(errno));
+            fprintf(stderr, "%s: getOutputFileLength()/getline() failed: %s\n", programName, strerror(errno));
             free(line);
             return ERROR;
+        }
+        else {
+            /* EOF */
+            INFO("getOutputFileLength()", "found EOF %s", "");
+            return DONE;
         }
     }
     
@@ -293,6 +300,7 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
     }
     
     free(line);
+    INFO("getOutputFileLength()", "found len=%lu", *value);
     return SUCCESS;
 }
 
@@ -318,6 +326,7 @@ int transferFile(FILE *source) {
         fprintf(stderr, "%s: transferFile()/fdopen() failed: %s\n", programName, strerror(errno));
         return ERROR;
     }
+    INFO("transferFile()", "opened %s for writing", fileName);
 
     size_t bytesAvailable = 0;
     size_t bytesWritten = 0;
@@ -335,43 +344,20 @@ int transferFile(FILE *source) {
         }
         bytesTransferred += bytesWritten;
         if (bytesTransferred == fileLength) {
+            INFO("transferFile()", "transferred %lu bytes to %s", bytesTransferred, fileName);
             fclose(outputFile);
             return SUCCESS;
         }
     }
     
     fclose(outputFile);
+    INFO("transferFile()", "closed %s", fileName);
     if (bytesTransferred < fileLength) {
         fprintf(stderr, "%s: missing bytes! received %zu out of %lu\n", programName, bytesTransferred, fileLength);
         return ERROR;
     }
 
     return SUCCESS;
-}
-
-/**
- * \brief This function prints a formatted string using vprintf
- *
- * \param formatted_string
- *
- * \return returns EXIT or CONTINUE
- * \retval return_code EXIT on failure
- * \retval return_code CONTÍNUE on success
- */
-int write_formatted(const char *error_prefix, const char *formatted_string, ...) {
-    
-    int return_code = SUCCESS;
-    
-    va_list args;
-    
-    va_start(args, formatted_string);
-    if (vprintf(formatted_string, args) < 0) {
-        fprintf(stderr, "%s write_formatted(): %s\n", error_prefix, strerror(errno));
-        return_code = ERROR;
-    }
-    va_end(args);
-    
-    return return_code;
 }
 
 
