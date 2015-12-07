@@ -27,13 +27,11 @@ void showUsage(FILE *stream, const char *cmnd, int exitcode);
 static const char *programName;
 
 
-/* listening port */
-#define SERV_PORT 9980
-
 /* maxium of allowed clients at the same time */
 #define MAX_CLIENTS 10
 
 /* counts our clients */
+// brauchen wir nicht
 unsigned int clientCount;
 
 /* maximum length for the queue of pending connections */
@@ -63,6 +61,10 @@ void sigchld_handler(int signo)
 
 
 int main(int argc, const char * argv[]) {
+
+	int opt = -1;
+	const char *port;
+
     int sfd = 0;
 	int cfd = 0;
     pid_t childpid;
@@ -70,6 +72,18 @@ int main(int argc, const char * argv[]) {
     struct sockaddr_in clientAddress;
 	struct sockaddr_in serverAddress;
     struct sigaction sa; /* for wait-child-handler */
+
+	/* Commandline parsen */
+	while ((opt = getopt(argc, argv, "p:h")) != -1) {
+		switch(opt) {
+			case 'p':
+				port = optarg;
+				break;
+			default:
+				usage();
+				exit(EXIT_FAILURE);	
+		}
+	}
 
     clientCount = 0;
 
