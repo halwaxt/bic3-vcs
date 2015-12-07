@@ -99,6 +99,7 @@ int main(int argc, const char * argv[]) {
     }
     
     fclose(toServer);
+    INFO("main()", "closed writing channel to server %s", server);
     
     FILE *fromServer = fdopen(backupOfSfd, "r");
     if (fromServer == NULL) {
@@ -106,7 +107,7 @@ int main(int argc, const char * argv[]) {
         close(backupOfSfd);
         exit(errno);
     }
-    
+    INFO("main()", "opened reading channel from server %s", server);
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
     int status = ERROR;
@@ -117,6 +118,7 @@ int main(int argc, const char * argv[]) {
         close(backupOfSfd);
         exit(status);
     }
+    INFO("main()", "server returned status %d", status);
     
     int canTransferFile = SUCCESS;
     while (canTransferFile != DONE) {
@@ -131,6 +133,8 @@ int main(int argc, const char * argv[]) {
     
     fclose(fromServer);
     close(backupOfSfd);
+    INFO("main()", "closed connection to server %s", server);
+    INFO("main()", "bye! %s", user);
     exit(EXIT_SUCCESS);
 }
 
@@ -190,7 +194,7 @@ int sendData(FILE *target, const char *key, const char *payload) {
     if (fprintf(target, "%s", payload) < 0) return ERROR;
     if (fprintf(target, "\n") < 0) return ERROR;
     if (fflush(target) == EOF) return ERROR;
-    INFO("sendData()", "sent key=value pair for key %s", key);
+    INFO("sendData()", "sent Data %s%s", key, payload);
     return SUCCESS;
 }
 
@@ -319,14 +323,15 @@ int transferFile(FILE *source) {
         free(fileName);
         return ERROR;
     }
-    
-    free(fileName);
+
     FILE *outputFile = fdopen(outputFileDescriptor, "w");
     if (outputFile == NULL) {
+        free(fileName);
         fprintf(stderr, "%s: transferFile()/fdopen() failed: %s\n", programName, strerror(errno));
         return ERROR;
     }
     INFO("transferFile()", "opened %s for writing", fileName);
+    free(fileName);
 
     size_t bytesAvailable = 0;
     size_t bytesWritten = 0;
@@ -344,7 +349,7 @@ int transferFile(FILE *source) {
         }
         bytesTransferred += bytesWritten;
         if (bytesTransferred == fileLength) {
-            INFO("transferFile()", "transferred %zu bytes to %s", bytesTransferred, fileName);
+            INFO("transferFile()", "transferred %zu bytes to file", bytesTransferred);
             fclose(outputFile);
             return SUCCESS;
         }
