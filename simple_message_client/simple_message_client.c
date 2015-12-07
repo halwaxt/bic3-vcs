@@ -25,7 +25,7 @@
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
 int write_formatted(const char *error_prefix, const char *formatted_string, ...);
 
-int connetToServer(const char *server, const char *port, int *socketDescriptor);
+int connectToServer(const char *server, const char *port, int *socketDescriptor);
 int sendData(FILE *target, const char *key, const char *payload);
 int checkServerResponseStatus(FILE *source, int *status);
 int transferFile(FILE *source);
@@ -48,7 +48,7 @@ int main(int argc, const char * argv[]) {
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
 
     int sfd = 0;
-    if (connetToServer(server, port, &sfd) != SUCCESS) {
+    if (connectToServer(server, port, &sfd) != SUCCESS) {
         fprintf(stderr, "%s: connectToServer() failed for server %s and port %s: %s\n", programName,   server, port, strerror(errno));
         exit(errno);
     }
@@ -131,7 +131,7 @@ int main(int argc, const char * argv[]) {
 }
 
 
-int connetToServer(const char *server, const char *port, int *socketDescriptor) {
+int connectToServer(const char *server, const char *port, int *socketDescriptor) {
     struct addrinfo hints;
     struct addrinfo *result, *rp;
     int sfd = -1;
