@@ -22,7 +22,7 @@
 #define SUCCESS 0
 #define DONE 2
 
-#define log_info(M, ...) fprintf(stderr, "[INFO] (%s:%d) " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#define log_info(M,...) fprintf(stderr, "[INFO] (%s:%d) " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
 int write_formatted(const char *formatted_string, ...);
@@ -49,7 +49,7 @@ int main(int argc, const char * argv[]) {
     
     smc_parsecommandline(argc, argv, showUsage, &server, &port, &user, &message, &image_url, &verbose);
 
-    log_info("command line args: server='%s', port='%s', user='%s', img_url='%s', message=%message'\n", server, port, user, message);
+    log_info("command line args: server=\"%s\", port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"", server, port, user, image_url, message);
     
     int sfd = 0;
     if (connetToServer(server, port, &sfd) != SUCCESS) {
@@ -98,16 +98,16 @@ int main(int argc, const char * argv[]) {
     /* fclose schließt auch sfd, daher vorher ein dup */
     
     int backupOfSfd = dup(sfd);
-    log_info("shutting down file pointer for writing socket\n", NULL);
+    log_info("shutting down file pointer for writing socket %s", "");
     if (shutdown(sfd, SHUT_WR) != SUCCESS) {
         fprintf(stderr, "%s: shutDown() SHUT_WR for server connection failed: %s\n", programName, strerror(errno));
         fclose(toServer);
         exit(EXIT_FAILURE);
     }
-    log_info("closing writing socket\n", NULL);
+    log_info("closing writing socket%s", "");
     fclose(toServer);
     
-    log_info("opening reading socket\n", NULL);
+    log_info("opening reading socket%s", "");
     FILE *fromServer = fdopen(backupOfSfd, "r");
     if (fromServer == NULL) {
         fprintf(stderr, "%s: fdOpen() to read from server failed: %s\n", programName, strerror(errno));
@@ -117,7 +117,7 @@ int main(int argc, const char * argv[]) {
     
     /* read line for status=... */
     /* if status returned from server != 0 then exit using the status */
-    log_info("reading server response\n", NULL);
+    log_info("reading server response%s", "");
     int status = ERROR;
     if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
         fprintf(stderr, "%s: reading server response failed with error %d\n", programName, status);
@@ -126,7 +126,7 @@ int main(int argc, const char * argv[]) {
         exit(status);
     }
     
-    log_info("downloading files\n", NULL);
+    log_info("downloading files%s", "");
     int canTransferFile = SUCCESS;
     while (canTransferFile != DONE) {
         canTransferFile = transferFile(fromServer);
@@ -138,7 +138,7 @@ int main(int argc, const char * argv[]) {
         }
     }
     
-    log_info("shutting down reading socket\n", NULL);
+    log_info("shutting down reading socket%s", "");
     fclose(fromServer);
     close(backupOfSfd);
     exit(EXIT_SUCCESS);
