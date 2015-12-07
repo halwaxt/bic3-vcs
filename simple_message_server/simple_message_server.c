@@ -34,7 +34,7 @@ static const char *programName;
 #define MAX_CLIENTS 10
 
 /* counts our clients */
-unsigned int clientcount;
+unsigned int clientCount;
 
 /* maximum length for the queue of pending connections */
 #define LISTENQ 1024
@@ -54,7 +54,7 @@ void sigchld_handler(int signo)
      */
     while( (pid = waitpid(-1,&status,WNOHANG)) > 0)
     {
-        clientcount--;
+        clientCount--;
         printf("%i exited with %i\n", pid, WEXITSTATUS(status));
     }
 
@@ -63,38 +63,40 @@ void sigchld_handler(int signo)
 
 
 int main(int argc, const char * argv[]) {
-    int sockfd, connfd;
-    pid_t   childpid;
-    socklen_t clilen;
-    struct sockaddr_in cliaddr, servaddr;
+    int sfd = 0;
+	int cfd = 0;
+    pid_t childpid;
+    socklen_t clientLen;
+    struct sockaddr_in clientAddress;
+	struct sockaddr_in serverAddress;
     struct sigaction sa; /* for wait-child-handler */
 
-    clientcount = 0;
+    clientCount = 0;
 
     /* Create Server-Socket of type IP( IP: 0) */
-    sockfd = socket(AF_INET,SOCK_STREAM,0);
-    if(sockfd < 0)
+    sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(sfd < 0)
     {
         perror("socket() error..");
         exit(EXIT_FAILURE);
     }
 
     /* Prepare our address-struct */
-    memset(&servaddr,0,sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
-    servaddr.sin_port = htons(SERV_PORT); /* bind server to SERV_PORT */
+    memset(&serverAddress, 0, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
+    serverAddress.sin_port = htons(SERV_PORT); /* bind server to SERV_PORT */
 
     /* bind sockt to address + port */
-    if(bind(sockfd, (struct sockaddr*)&servaddr,sizeof(servaddr)) != 0)
+    if(bind(sfd, (struct sockaddr*) &serverAddress, sizeof(serverAddress)) != 0)
     {
         perror("bind() failed..");
-        close(sockfd);
+        close(sfd);
         exit(EXIT_FAILURE);
     }
 
     /* start listening */
-    if(listen(sockfd,LISTENQ) < 0)
+    if(listen(sfd, LISTENQ) < 0)
     {
         perror("listen() error..");
         exit(EXIT_FAILURE);
@@ -113,12 +115,12 @@ int main(int argc, const char * argv[]) {
      */
     while(1)
     {   
-        if(clientcount < MAX_CLIENTS)
+        if(clientCount < MAX_CLIENTS)
         {   
-            clilen = sizeof(cliaddr);
+            clientLen = sizeof(clientAddress);
             /* accept connections from clients */
-            connfd = accept(sockfd, (struct sockaddr *)&cliaddr, &clilen);
-            if(connfd < 0)
+            cfd = accept(sfd, (struct sockaddr *) &clientAddress, &clientLen);
+            if(cfd < 0)
             {
                 /*
                    withouth this we would recieve:
@@ -130,11 +132,11 @@ int main(int argc, const char * argv[]) {
                     continue;
 
                     perror("accept() error..");
-                    close(sockfd);
+                    close(sfd);
                     exit(EXIT_FAILURE);
             }
 
-            clientcount++;
+            clientCount++;
 
             /* lets create a subprocess */
             childpid = fork();
@@ -147,14 +149,14 @@ int main(int argc, const char * argv[]) {
             /* let's start our child-subprocess */
             if( childpid  == 0 )
             {
-                close(sockfd);
-                exit(handle_client(connfd));
+                close(sfd);
+                exit(handle_client(cfd));
             }
 
             /* continue our server-routine */
             printf("Client has PID %i\n",childpid);
 
-            close(connfd);
+            close(cfd);
            }
     }
 
