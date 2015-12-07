@@ -202,7 +202,7 @@ int checkServerResponseStatus(FILE *source, int *status) {
     int found = 0;
 
     errno = SUCCESS;
-    if (getline(&line, &sizeOfLine, source) != SUCCESS) {
+    if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         free(line);
         if (errno == EINVAL || errno == EOVERFLOW) {
         fprintf(stderr, "%s: checkServerResponseStatus()/getline() failed: %s\n", programName, strerror(errno));
@@ -344,7 +344,7 @@ int transferFile(FILE *source) {
         }
         bytesTransferred += bytesWritten;
         if (bytesTransferred == fileLength) {
-            INFO("transferFile()", "transferred %lu bytes to %s", bytesTransferred, fileName);
+            INFO("transferFile()", "transferred %zu bytes to %s", bytesTransferred, fileName);
             fclose(outputFile);
             return SUCCESS;
         }
