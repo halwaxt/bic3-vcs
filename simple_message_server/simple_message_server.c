@@ -35,6 +35,7 @@
 static int verbose;
 static const char *programName;
 
+void printUsage(const char *programName);
 void sigchld_handler(int signo);
 int convertString2Int(const char *string);
 void handle_client(int cfd);
@@ -44,7 +45,7 @@ int main(int argc, const char * argv[]) {
 	verbose = 1;
 	programName = argv[0];
 
-	int opt = -1;
+	int opt = 0;
 	int port = -1;
 	const char *portstring;
 
@@ -55,6 +56,11 @@ int main(int argc, const char * argv[]) {
     struct sockaddr_in peerAddress;
 	struct sockaddr_in myAddress;
     struct sigaction sa; /* for wait-child-handler */
+
+	INFO("main()", "argc = %d", argc);
+	if(argc < 2) {
+		printUsage(programName);
+	}
 
 	INFO("main()", "start commanline parsing %s", "");
 	static struct option long_options[] = {
@@ -74,9 +80,7 @@ int main(int argc, const char * argv[]) {
 				verbose = 1;
 				break;
 			default:
-				fprintf(stderr, "usage: %s option:\n", argv[0]);
-				fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
-				exit(EXIT_FAILURE);	
+				printUsage(programName);
 		}
 	}
 
@@ -174,6 +178,12 @@ int main(int argc, const char * argv[]) {
     }
 
     return EXIT_SUCCESS;
+}
+
+void printUsage(const char *programName) {
+	fprintf(stderr, "usage: %s option:\n", programName);
+	fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
+	exit(EXIT_FAILURE);	
 }
 
 int convertString2Int(const char *string) {
