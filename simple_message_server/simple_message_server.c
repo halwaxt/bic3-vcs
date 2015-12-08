@@ -45,8 +45,8 @@ int main(int argc, const char * argv[]) {
 	programName = argv[0];
 
 	int opt = -1;
+	int port = -1;
 	const char *portstring;
-	int port;
 
     int sfd = 0;
 	int cfd = 0;
