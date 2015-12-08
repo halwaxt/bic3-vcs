@@ -17,16 +17,12 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <getopt.h>
 #include "simple_message_client_commandline_handling.h"
 
 #define ERROR -1
 #define SUCCESS 0
 #define DONE 2
-
-void usage(const char *programName);
-
-static const char *programName;
-
 
 /* maxium of allowed clients at the same time */
 #define MAX_CLIENTS 10
@@ -59,8 +55,6 @@ void sigchld_handler(int signo)
 
 int main(int argc, const char * argv[]) {
 
-	programName = argv[0];
-
 	int opt = -1;
 	const char *port;
 
@@ -73,13 +67,20 @@ int main(int argc, const char * argv[]) {
     struct sigaction sa; /* for wait-child-handler */
 
 	/* Commandline parsen */
-	while ((opt = getopt(argc, (char ** const) argv, "p:h")) != -1) {
+	static struct option long_options[] = {
+		{"port", required_argument, 0, 'p'},
+		{"help", no_argument, 0, 'h'},
+		{0, 0, 0, 0}
+	};
+	int long_index =0;
+	while ((opt = getopt_long(argc, (char ** const) argv, "p:", long_options, &long_index)) != -1) {
 		switch(opt) {
 			case 'p':
 				port = optarg;
 				break;
 			default:
-				usage(programName);
+				fprintf(stderr, "usage: %s option:\n", argv[0]);
+				fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
 				exit(EXIT_FAILURE);	
 		}
 	}
@@ -171,8 +172,4 @@ int main(int argc, const char * argv[]) {
     }
 
     return EXIT_SUCCESS;
-}
-
-void usage(programName) {
-	fprintf(stdout, "%s: fooo", programName);
 }
