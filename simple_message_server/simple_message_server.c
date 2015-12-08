@@ -18,6 +18,8 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <getopt.h>
+#include <errno.h>
+#include <limits.h>
 #include "simple_message_client_commandline_handling.h"
 
 #define ERROR -1
@@ -33,34 +35,18 @@
 static int verbose;
 static const char *programName;
 
+void sigchld_handler(int signo);
+int convertString2Int(const char *string);
 void handle_client(int cfd);
-
-void sigchld_handler(int signo)
-{
-	signo = signo;
-    int status;
-    pid_t pid;
-
-	INFO("sigchld_handler()", "entered sigchld_handler %s", "");
-    /*
-       -1 means that we wait until the first process is terminated
-       WNOHANG tells the kernel not to block if there are no terminated
-       child-processes.
-     */
-    while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
-    {
-		INFO("waitpid()", "%i exited with %i\n", pid, WEXITSTATUS(status));
-    }
-}
-
 
 int main(int argc, const char * argv[]) {
 
-	verbose = 0;
+	verbose = 1;
 	programName = argv[0];
 
 	int opt = -1;
-	const char *port;
+	const char *portstring;
+	int port;
 
     int sfd = 0;
 	int cfd = 0;
@@ -80,8 +66,9 @@ int main(int argc, const char * argv[]) {
 	while ((opt = getopt_long(argc, (char ** const) argv, "p:v", long_options, &long_index)) != -1) {
 		switch(opt) {
 			case 'p':
-				port = optarg;
-				INFO("getopt_long()", "port=%s", port);
+				portstring = optarg;
+				INFO("getopt_long()", "port=%s", portstring);
+				port = convertString2Int(portstring);
 				break;
 			case 'v':
 				verbose = 1;
@@ -187,6 +174,49 @@ int main(int argc, const char * argv[]) {
     }
 
     return EXIT_SUCCESS;
+}
+
+int convertString2Int(const char *string) {
+	INFO("convertString2Int()", "convert port string (%s) to interger", string);
+
+	char *endptr;
+	long val;
+
+	errno = 0;
+
+	val = strtol(string, &endptr, 10);
+
+	if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
+		|| (errno != 0 && val == 0)) {
+			perror("strtol");
+			exit(EXIT_FAILURE);
+	}
+
+	if (endptr == string) {
+		fprintf(stderr, "No digits were found\n");
+		exit(EXIT_FAILURE);
+	}
+
+	INFO("convertString2Int()", "converted string %s to integer %ld", string, val);
+	return val;
+
+}
+
+void sigchld_handler(int signo) {
+	signo = signo;
+    int status;
+    pid_t pid;
+
+	INFO("sigchld_handler()", "entered sigchld_handler %s", "");
+    /*
+       -1 means that we wait until the first process is terminated
+       WNOHANG tells the kernel not to block if there are no terminated
+       child-processes.
+     */
+    while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
+    {
+		INFO("waitpid()", "%i exited with %i\n", pid, WEXITSTATUS(status));
+    }
 }
 
 void handle_client(int cfd) {
