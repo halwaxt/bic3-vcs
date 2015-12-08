@@ -10,5 +10,5 @@ OBJECTS=simple_message_server.o
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-simple_message_client: $(OBJECTS)
+simple_message_server: $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $^

@@ -24,18 +24,14 @@
 #define SUCCESS 0
 #define DONE 2
 
-/* maxium of allowed clients at the same time */
-#define MAX_CLIENTS 10
-
 /* maximum length for the queue of pending connections */
 #define LISTENQ 1024
 
-/*
-   our child-handler. wait for all children to avoid zombies
- */
-/* TODO: WTF is signo? */
+void handle_client(int cfd);
+
 void sigchld_handler(int signo)
 {
+	signo = signo;
     int status;
     pid_t pid;
 
@@ -48,8 +44,6 @@ void sigchld_handler(int signo)
     {
         fprintf(stdout, "%i exited with %i\n", pid, WEXITSTATUS(status));
     }
-
-    return;
 }
 
 
@@ -85,7 +79,6 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	/* TODO: getaddrinfo */
     /* Create Server-Socket */
     sfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sfd < 0)
@@ -102,7 +95,7 @@ int main(int argc, const char * argv[]) {
     myAddress.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
 
     /* bind sockt to address + port */
-    if(bind(sfd, (struct sockaddr*) &myAddress, sizeof(struct sockaddr_in)) != 0)
+    if(bind(sfd, (struct sockaddr*) &myAddress, sizeof(struct sockaddr_in)) != SUCCESS)
     {
         perror("bind() failed..");
         close(sfd);
@@ -154,6 +147,7 @@ int main(int argc, const char * argv[]) {
             if(childpid < 0)
             {
                 perror("fork() failed");
+				close(sfd);
                 exit(EXIT_FAILURE);
             }
 
@@ -161,8 +155,7 @@ int main(int argc, const char * argv[]) {
             if( childpid  == 0 )
             {
                 close(sfd);
-				/* TODO: was starten wir? */
-                exit(handle_client(cfd));
+                handle_client(cfd);
             }
 
             /* continue our server-routine */
@@ -172,4 +165,20 @@ int main(int argc, const char * argv[]) {
     }
 
     return EXIT_SUCCESS;
+}
+
+void handle_client(int cfd) {
+
+	if ((dup2(cfd, STDIN_FILENO) == ERROR) || (dup2(cfd, STDOUT_FILENO) == ERROR)) {
+		perror("dub2() failed");
+		close(cfd);
+		exit(EXIT_FAILURE);
+	}
+
+	if(close(cfd) != SUCCESS) {
+		perror("close() failed");
+		exit(EXIT_FAILURE);
+	}
+
+	execl("/usr/local/bin/simple_message_server_logic", "simple_message_server_logic", (char *) NULL);
 }
