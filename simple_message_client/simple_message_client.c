@@ -26,7 +26,6 @@
 		if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
 
 void showUsage(FILE *stream, const char *cmnd, int exitcode);
-
 int connectToServer(const char *server, const char *port, int *socketDescriptor);
 int sendData(FILE *target, const char *key, const char *payload);
 int checkServerResponseStatus(FILE *source, int *status);
@@ -51,12 +50,14 @@ int main(int argc, const char * argv[]) {
     
     INFO("main()", "Using the following options: server=\"%s\", port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"", server, port, user, image_url, message);
 	
+	INFO("main()", "connecting to server=\"%s\", port=\"%s\"", server, port);
     int sfd = 0;
     if (connectToServer(server, port, &sfd) != SUCCESS) {
-        fprintf(stderr, "%s: connectToServer() failed for server %s and port %s: %s\n", programName,   server, port, strerror(errno));
+        fprintf(stderr, "%s: connectToServer() failed for server %s and port %s: %s\n", programName, server, port, strerror(errno));
         exit(errno);
     }
     
+	INFO("main()", "open file descriptor for writing %s", "");
     errno = SUCCESS;
     FILE *toServer = fdopen(sfd, "w");
     if (toServer == NULL) {
@@ -65,6 +66,7 @@ int main(int argc, const char * argv[]) {
         exit(errno);
     }
     
+	INFO("main()", "sending data to server %s", server);
     if (sendData(toServer, "user=", user) == ERROR) {
         fprintf(stderr, "%s: sendData() for param user=<user> failed: %s\n", programName, strerror(errno));
         shutdown(sfd, SHUT_RDWR);
@@ -73,6 +75,7 @@ int main(int argc, const char * argv[]) {
     }
     
     if (image_url != NULL) {
+		INFO("main()", "found image, sending to server %s", server);
         if (sendData(toServer, "img=", image_url) == ERROR) {
             fprintf(stderr, "%s: sendData() for param img=<image_url> failed: %s\n", programName, strerror(errno));
             shutdown(sfd, SHUT_RDWR);
@@ -81,6 +84,7 @@ int main(int argc, const char * argv[]) {
         }
     }
     
+	INFO("main()", "send message to server %s", server);
     if (sendData(toServer, "", message) == ERROR) {
         fprintf(stderr, "%s: sendData() for message failed: %s\n", programName, strerror(errno));
         shutdown(sfd, SHUT_RDWR);
@@ -89,18 +93,21 @@ int main(int argc, const char * argv[]) {
     }
     
     /* fclose schließt auch sfd, daher vorher ein dup */
-    
+    INFO("main()", "creating backup of file descriptor %s", "");	
     int backupOfSfd = dup(sfd);
     
+	INFO("main()", "closing connection to server %s", server);
     if (shutdown(sfd, SHUT_WR) != SUCCESS) {
         fprintf(stderr, "%s: shutDown() SHUT_WR for server connection failed: %s\n", programName, strerror(errno));
         fclose(toServer);
         exit(EXIT_FAILURE);
     }
     
+	INFO("main()", "closing file descriptor %s", "");
     fclose(toServer);
     INFO("main()", "closed writing channel to server %s", server);
     
+	INFO("main()", "open stream from server %s", server);
     FILE *fromServer = fdopen(backupOfSfd, "r");
     if (fromServer == NULL) {
         fprintf(stderr, "%s: fdOpen() to read from server failed: %s\n", programName, strerror(errno));
@@ -112,6 +119,7 @@ int main(int argc, const char * argv[]) {
     /* if status returned from server != 0 then exit using the status */
     int status = ERROR;
     
+	INFO("main()", "start checking server response %s", "");
     if (checkServerResponseStatus(fromServer, &status) != SUCCESS || status != SUCCESS) {
         fprintf(stderr, "%s: reading server response failed with error %d\n", programName, status);
         fclose(fromServer);
@@ -120,6 +128,7 @@ int main(int argc, const char * argv[]) {
     }
     INFO("main()", "server returned status %d", status);
     
+	INFO("main()", "start receiving files from server %s", server);
     int canTransferFile = SUCCESS;
     while (canTransferFile != DONE) {
         canTransferFile = transferFile(fromServer);
@@ -131,10 +140,11 @@ int main(int argc, const char * argv[]) {
         }
     }
     
+	INFO("main()", "received all data, closing connection to server %s", server);
     fclose(fromServer);
     close(backupOfSfd);
     INFO("main()", "closed connection to server %s", server);
-    INFO("main()", "bye! %s", user);
+    INFO("main()", "bye %s!", user);
     exit(EXIT_SUCCESS);
 }
 
@@ -144,15 +154,14 @@ int connectToServer(const char *server, const char *port, int *socketDescriptor)
     struct addrinfo *result, *rp;
     int sfd = -1;
     
-    /* Obtain address(es) matching host/port */
-    
+	INFO("connectToServer()", "creating address strct %s", "");
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
     hints.ai_socktype = SOCK_STREAM; /* Stream socket */
     hints.ai_flags = 0;
     hints.ai_protocol = 0;          /* Any protocol */
     
-
+	INFO("connectToServer()", "use getaddrinfo() on %s", server);
     if (getaddrinfo(server, port, &hints, &result) != SUCCESS) {
         fprintf(stderr, "%s: getaddrinfo() failed: %s\n", programName, strerror(errno));
         return ERROR;
@@ -162,19 +171,23 @@ int connectToServer(const char *server, const char *port, int *socketDescriptor)
      Try each address until we successfully connect(2).
      If socket(2) (or connect(2)) fails, we (close the socket
      and) try the next address. */
-    
+ 	INFO("connectToServer()", "iterate through list of getaddrinfo filled structure %s", ""); 
     for (rp = result; rp != NULL; rp = rp->ai_next) {
+		INFO("connectToServer()", "try socket %d - %d - %d", rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         sfd = socket(rp->ai_family, rp->ai_socktype,
                      rp->ai_protocol);
         if (sfd == -1)
             continue;
         
+		INFO("connectToServer()", "try connect to former created socket %s", "");
         if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1)
             break;                  /* Success */
         
+		INFO("connectToServer()", "closing socket %s", "");
         close(sfd);
     }
 
+	INFO("connectToServer()", "freeaddrinfo() %s", "");
     freeaddrinfo(result);           /* No longer needed */
     
     if (rp == NULL) {               /* No address succeeded */
@@ -182,7 +195,7 @@ int connectToServer(const char *server, const char *port, int *socketDescriptor)
         return ERROR;
     }
     
-    INFO("connectToServer()", "obtained address %s, port number %s", server, port);
+    INFO("connectToServer()", "connected to address %s, port number %s", server, port);
     *socketDescriptor = sfd;
     return SUCCESS;
 
@@ -205,6 +218,7 @@ int checkServerResponseStatus(FILE *source, int *status) {
     size_t sizeOfLine = 0;
     int found = 0;
 
+	INFO("checkServerResponseStatus()", "start read lines %s", "");
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         free(line);
@@ -219,6 +233,7 @@ int checkServerResponseStatus(FILE *source, int *status) {
         }
     }
 
+	INFO("checkServerResponseStatus()", "try to find status code in stream %s", "");
     found = sscanf(line, "status=%d", status);
     if (found == 0 || found == EOF) {
         fprintf(stderr, "%s: checkServerResponseStatus()/sscanf() failed: %s\n", programName, strerror(errno));
@@ -236,6 +251,7 @@ int getOutputFileName(FILE *source, char **value) {
     char *fileName = NULL;
     size_t sizeOfLine = 0;
     
+	INFO("getOutputFileName()", "start read lines %s", "");
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         free(line);
@@ -250,6 +266,7 @@ int getOutputFileName(FILE *source, char **value) {
         }
     }
     
+	INFO("getOutputFileName()", "try to malloc for filename %s", "");
     fileName = malloc(sizeof(char) * strlen(line));
     if (fileName == NULL) {
         fprintf(stderr, "%s: getOutputFileName()/malloc() failed: %s\n", programName, strerror(errno));
@@ -257,6 +274,7 @@ int getOutputFileName(FILE *source, char **value) {
         return ERROR;
     }
     fileName[0] = '\0';
+	INFO("getOutputFileName()", "try to find filename in stream %s", "");
     if (sscanf(line, "file=%s", fileName) == EOF) {
         fprintf(stderr, "%s: getOutputFileName()/file=<file> pattern not found\n", programName);
         free(fileName);
@@ -282,6 +300,7 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
     size_t sizeOfLine = 0;
     int found = 0;
     
+	INFO("getOutputFileLength()", "start read lines %s", "");
     errno = SUCCESS;
     if (getline(&line, &sizeOfLine, source) < SUCCESS) {
         if (errno == EINVAL || errno == EOVERFLOW) {
@@ -296,6 +315,7 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
         }
     }
     
+	INFO("getOutputFileLength()", "try to find file length in stream %s", "");
     found = sscanf(line, "len=%lu", value);
     if (found == 0 || found == EOF) {
         fprintf(stderr, "%s: getOutputFileLength()/pattern len=<length> not found\n", programName);
@@ -313,10 +333,13 @@ int transferFile(FILE *source) {
     unsigned long fileLength = 0;
     int result = 0;
     
+	INFO("transferFile()", "get result from getOutputFileName() %s", "");
     if ((result = getOutputFileName(source, &fileName)) != SUCCESS) return result;
+	INFO("transferFile()", "get result from getOutputFileLength() %s", "");
     if ((result = getOutputFileLength(source, &fileLength)) != SUCCESS) return result;
     
     errno = SUCCESS;
+	INFO("transferFile()", "open outputFileDescriptor %s", "");
     int outputFileDescriptor = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, 0664);
     if (outputFileDescriptor == ERROR) {
         fprintf(stderr, "%s: transferFile()/open() failed: %s\n", programName, strerror(errno));
@@ -324,6 +347,7 @@ int transferFile(FILE *source) {
         return ERROR;
     }
 
+	INFO("transferFile()", "fdopen outputFile  %s", "");
     FILE *outputFile = fdopen(outputFileDescriptor, "w");
     if (outputFile == NULL) {
         free(fileName);
@@ -339,6 +363,7 @@ int transferFile(FILE *source) {
     size_t bufferSize = 1;
     char buffer;
     
+	INFO("transferFile()", "start writing bytes to outputFile %s", fileName);
     while ((bytesAvailable = fread(&buffer, (size_t)sizeof(char), bufferSize, source)) > 0) {
         
         bytesWritten = fwrite(&buffer, (size_t)sizeof(char), bytesAvailable, outputFile);
