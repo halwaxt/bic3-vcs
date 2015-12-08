@@ -100,7 +100,7 @@ int main(int argc, const char * argv[]) {
     myAddress.sin_port = htons(port); /* bind server to port */
     myAddress.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
 
-	INFO("main()", "start binding socket to %d:%d", myAddress.sin_addr.s_addr, myAddress.sin_port);
+	INFO("main()", "start binding socket to %d:%u", myAddress.sin_addr.s_addr, port);
     if(bind(sfd, (struct sockaddr*) &myAddress, sizeof(struct sockaddr_in)) != SUCCESS)
     {
         perror("bind() failed..");
