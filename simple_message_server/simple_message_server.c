@@ -27,6 +27,12 @@
 /* maximum length for the queue of pending connections */
 #define LISTENQ 1024
 
+#define INFO(function, M, ...) \
+	if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
+
+static int verbose;
+static const char *programName;
+
 void handle_client(int cfd);
 
 void sigchld_handler(int signo)
@@ -35,6 +41,7 @@ void sigchld_handler(int signo)
     int status;
     pid_t pid;
 
+	INFO("sigchld_handler()", "entered sigchld_handler %s", "");
     /*
        -1 means that we wait until the first process is terminated
        WNOHANG tells the kernel not to block if there are no terminated
@@ -42,12 +49,15 @@ void sigchld_handler(int signo)
      */
     while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
     {
-        fprintf(stdout, "%i exited with %i\n", pid, WEXITSTATUS(status));
+		INFO("waitpid()", "%i exited with %i\n", pid, WEXITSTATUS(status));
     }
 }
 
 
 int main(int argc, const char * argv[]) {
+
+	verbose = 0;
+	programName = argv[0];
 
 	int opt = -1;
 	const char *port;
@@ -60,17 +70,21 @@ int main(int argc, const char * argv[]) {
 	struct sockaddr_in myAddress;
     struct sigaction sa; /* for wait-child-handler */
 
-	/* Commandline parsen */
+	INFO("main()", "start commanline parsing %s", "");
 	static struct option long_options[] = {
 		{"port", required_argument, 0, 'p'},
 		{"help", no_argument, 0, 'h'},
 		{0, 0, 0, 0}
 	};
 	int long_index =0;
-	while ((opt = getopt_long(argc, (char ** const) argv, "p:", long_options, &long_index)) != -1) {
+	while ((opt = getopt_long(argc, (char ** const) argv, "p:v", long_options, &long_index)) != -1) {
 		switch(opt) {
 			case 'p':
 				port = optarg;
+				INFO("getopt_long()", "port=%s", port);
+				break;
+			case 'v':
+				verbose = 1;
 				break;
 			default:
 				fprintf(stderr, "usage: %s option:\n", argv[0]);
@@ -79,7 +93,7 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-    /* Create Server-Socket */
+	INFO("main()", "start creating socket %s", "");
     sfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sfd < 0)
     {
@@ -87,30 +101,34 @@ int main(int argc, const char * argv[]) {
 		close(sfd);
         exit(EXIT_FAILURE);
     }
+	INFO("main()", "socket created %s", "");
 
-    /* Prepare our address-struct */
+	INFO("main()", "preparing connection infos %s", "");
     memset(&myAddress, 0, sizeof(struct sockaddr_in));
     myAddress.sin_family = AF_INET;
     myAddress.sin_port = htons(port); /* bind server to port */
     myAddress.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
 
-    /* bind sockt to address + port */
+	INFO("main()", "start binding socket to %d:%d", myAddress.sin_addr.s_addr, myAddress.sin_port);
     if(bind(sfd, (struct sockaddr*) &myAddress, sizeof(struct sockaddr_in)) != SUCCESS)
     {
         perror("bind() failed..");
         close(sfd);
         exit(EXIT_FAILURE);
     }
+	INFO("main()", "binding succeeded %s", "");
 
-    /* start listening */
+	INFO("main()", "start listening with Queue-Size %d", LISTENQ);
     if(listen(sfd, LISTENQ) < 0)
     {
         perror("listen() error..");
         close(sfd);
         exit(EXIT_FAILURE);
     }
+	INFO("main()", "listening %s", "");
 
 
+	INFO("main()", "preparing sigaction() %s", "");
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = sigchld_handler;
     sigaction(SIGCHLD, &sa, NULL);
@@ -121,10 +139,13 @@ int main(int argc, const char * argv[]) {
        if a client is connectd it forks into another
        subprocess.
      */
+	INFO("main()", "starting loop for client acception %s", "");
     while(1)
     {   
             clientLen = sizeof(peerAddress);
-            /* accept connections from clients */
+			INFO("main()", "clientLen = %d", clientLen);
+
+			INFO("main()", "accepting connection from client %s", "");
             cfd = accept(sfd, (struct sockaddr *) &peerAddress, &clientLen);
             if(cfd < 0)
             {
@@ -142,7 +163,7 @@ int main(int argc, const char * argv[]) {
                     exit(EXIT_FAILURE);
             }
 
-            /* lets create a subprocess */
+			INFO("main()", "create subprocess: fork() %s", "");
             childpid = fork();
             if(childpid < 0)
             {
@@ -151,16 +172,17 @@ int main(int argc, const char * argv[]) {
                 exit(EXIT_FAILURE);
             }
 
-            /* let's start our child-subprocess */
+			INFO("main()", "start cild-subprocess %s", "");
             if( childpid  == 0 )
             {
                 close(sfd);
                 handle_client(cfd);
             }
+			INFO("main()", "client has PID=%i", childpid);
 
-            /* continue our server-routine */
-            fprintf(stdout, "Client has PID %i\n",childpid);
+			INFO("main()", "continue server %s", "");
 
+			INFO("main()", "closing client filedescriptor %s", "");
             close(cfd);
     }
 
@@ -169,16 +191,19 @@ int main(int argc, const char * argv[]) {
 
 void handle_client(int cfd) {
 
+	INFO("handle_client()", "twisting filedescriptors to STDIN and STDOUT %s", "");
 	if ((dup2(cfd, STDIN_FILENO) == ERROR) || (dup2(cfd, STDOUT_FILENO) == ERROR)) {
 		perror("dub2() failed");
 		close(cfd);
 		exit(EXIT_FAILURE);
 	}
 
+	INFO("handle_client()", "closing client fd %i", cfd);
 	if(close(cfd) != SUCCESS) {
 		perror("close() failed");
 		exit(EXIT_FAILURE);
 	}
 
+	INFO("handle_client()", "starting simple_message_server_logic %s", "");
 	execl("/usr/local/bin/simple_message_server_logic", "simple_message_server_logic", (char *) NULL);
 }
