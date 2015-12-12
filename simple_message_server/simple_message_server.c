@@ -41,7 +41,7 @@
 static const char *programName;
 static int verbose = 1;
 
-void printUsage();
+void printUsage(void);
 void handleChildSignals(int signalNumber);
 void waitForClients(int listening_socket_descriptor);
 void startClientInteraction(int client_socket_descriptor);
@@ -51,7 +51,7 @@ int main(int argc, const char * argv[]) {
     
     INFO("main()", "argc = %d", argc);
     if(argc < 2) {
-        printUsage(programName);
+        printUsage();
         exit(EXIT_FAILURE);
     }
     
@@ -239,21 +239,20 @@ void handleChildSignals(int signalNumber)
 
 const char *getTcpPort(int argc, const char *argv[]) {
     
-    static struct option long_options[] = {
+    static struct option options[] = {
         {"port", required_argument, 0, 'p'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
     
     char *tcpPort = NULL;
-    int opt = 0;
-    int long_index =0;
+    int option = 0;
+    int index =0;
     
-    while ((opt = getopt_long(argc, (char ** const) argv, "p:v", long_options, &long_index)) != -1) {
-        switch(opt) {
+    while ((option = getopt_long(argc, (char ** const) argv, "p:v", options, &index)) != -1) {
+        switch(option) {
             case 'p':
                 tcpPort = optarg;
-                INFO("getTcpPort()", "tcp port=%s", tcpPort);
             default:
                 printUsage();
         }
