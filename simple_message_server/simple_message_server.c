@@ -49,13 +49,13 @@ const char *getTcpPort(int argc, const char *argv[]);
 
 int main(int argc, const char * argv[]) {
     
-    INFO("main()", "argc = %d", argc);
+    programName = argv[0];
     if(argc < 2) {
         printUsage();
         exit(EXIT_FAILURE);
     }
     
-    programName = argv[0];
+
     const char *tcpPort = getTcpPort(argc, argv);
     if (tcpPort == NULL) {
         exit(EXIT_FAILURE);
@@ -249,12 +249,15 @@ const char *getTcpPort(int argc, const char *argv[]) {
     int option = 0;
     int index =0;
     
-    while ((option = getopt_long(argc, (char ** const) argv, "p:v", options, &index)) != -1) {
+    while ((option = getopt_long(argc, (char ** const) argv, "p:h", options, &index)) != ERROR) {
+        INFO("getTcpPort()", "parsing option %c with argument %s", option, optarg);
         switch(option) {
             case 'p':
                 tcpPort = optarg;
+                break;
             default:
                 printUsage();
+                return NULL;
         }
     }
     
