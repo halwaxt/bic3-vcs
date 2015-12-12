@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
 #include <unistd.h>
@@ -20,230 +21,253 @@
 #include <getopt.h>
 #include <errno.h>
 #include <limits.h>
-#include "simple_message_client_commandline_handling.h"
+#include <signal.h>
 
 #define ERROR -1
 #define SUCCESS 0
 #define DONE 2
 
 /* maximum length for the queue of pending connections */
-#define LISTENQ 1024
+#define BACKLOG_SIZE 10
+
+/* handling interaction with clients */
+#define PATH_TO_SERVER_LOGIC "/usr/local/bin/simple_message_server_logic"
+#define SERVER_LOGIC "simple_message_server_logic"
 
 #define INFO(function, M, ...) \
 	if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
 
-static int verbose;
+//static int verbose;
 static const char *programName;
+static int verbose = 0;
 
-void printUsage(const char *programName);
-void sigchld_handler(int signo);
-int convertString2Int(const char *string);
-void handle_client(int cfd);
+void printUsage(void);
+void handleChildSignals(int signalNumber);
+void waitForClients(int listening_socket_descriptor);
+void startClientInteraction(int client_socket_descriptor);
+const char *getTcpPort(int argc, const char *argv[]);
 
 int main(int argc, const char * argv[]) {
-
-	verbose = 1;
-	programName = argv[0];
-
-	int opt = 0;
-	int port = -1;
-	const char *portstring;
-
-    int sfd = 0;
-	int cfd = 0;
-    pid_t childpid;
-    socklen_t clientLen;
-    struct sockaddr_in peerAddress;
-	struct sockaddr_in myAddress;
-    struct sigaction sa; /* for wait-child-handler */
-
-	INFO("main()", "argc = %d", argc);
-	if(argc < 2) {
-		printUsage(programName);
-	}
-
-	INFO("main()", "start commanline parsing %s", "");
-	static struct option long_options[] = {
-		{"port", required_argument, 0, 'p'},
-		{"help", no_argument, 0, 'h'},
-		{0, 0, 0, 0}
-	};
-	int long_index =0;
-	while ((opt = getopt_long(argc, (char ** const) argv, "p:v", long_options, &long_index)) != -1) {
-		switch(opt) {
-			case 'p':
-				portstring = optarg;
-				INFO("getopt_long()", "port=%s", portstring);
-				port = convertString2Int(portstring);
-				break;
-			case 'v':
-				verbose = 1;
-				break;
-			default:
-				printUsage(programName);
-		}
-	}
-
-	INFO("main()", "start creating socket %s", "");
-    sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(sfd < 0)
-    {
-        perror("socket() error..");
-		close(sfd);
+    
+    programName = argv[0];
+    if(argc < 2) {
+        printUsage();
         exit(EXIT_FAILURE);
     }
-	INFO("main()", "socket created %s", "");
+    
 
-	INFO("main()", "preparing connection infos %s", "");
-    memset(&myAddress, 0, sizeof(struct sockaddr_in));
-    myAddress.sin_family = AF_INET;
-    myAddress.sin_port = htons(port); /* bind server to port */
-    myAddress.sin_addr.s_addr = htonl(INADDR_ANY); /* bind server to all interfaces */
-
-	INFO("main()", "start binding socket to %d:%u", myAddress.sin_addr.s_addr, port);
-    if(bind(sfd, (struct sockaddr*) &myAddress, sizeof(struct sockaddr_in)) != SUCCESS)
-    {
-        perror("bind() failed..");
-        close(sfd);
+    const char *tcpPort = getTcpPort(argc, argv);
+    if (tcpPort == NULL) {
         exit(EXIT_FAILURE);
     }
-	INFO("main()", "binding succeeded %s", "");
-
-	INFO("main()", "start listening with Queue-Size %d", LISTENQ);
-    if(listen(sfd, LISTENQ) < 0)
+    
+    INFO("main()", "using tcp port %s", tcpPort);
+    
+    struct addrinfo *addrInfoResult, hints;
+    memset(&hints, 0, sizeof(hints));
+    
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    
+    int result;
+    if ((result = getaddrinfo(NULL, tcpPort, &hints, &addrInfoResult)) != SUCCESS)
     {
-        perror("listen() error..");
-        close(sfd);
+        fprintf(stderr, "%s: getaddrinfo(): %s\n", programName, gai_strerror(result));
         exit(EXIT_FAILURE);
     }
-	INFO("main()", "listening %s", "");
+    
+    INFO("main()", "getaddrinfo succeeded %s", "");
+    
+    int listening_socket_descriptor = 0;
+    struct addrinfo *serverCandidate;
+    int optionValue = 1;
+    
+    /* we use the first addrinfo which works */
+    for (serverCandidate = addrInfoResult; serverCandidate != NULL; serverCandidate = serverCandidate->ai_next) {
+        listening_socket_descriptor = socket(serverCandidate->ai_family,
+                       serverCandidate->ai_socktype, serverCandidate->ai_protocol);
+        
+        if (listening_socket_descriptor == ERROR) {
+            INFO("main()", "failed creating a socket for %d, %d, %d", serverCandidate->ai_family, serverCandidate->ai_socktype, serverCandidate->ai_protocol);
+            continue;
+        }
+        
+        /* Setting the SO_REUSEADDR option means that we can bind a socket to a local port even if another TCP is bound to 
+         the same port in either of the scenarios described at the start of this section. Most TCP servers should enable 
+         this option.
+         The Linux Programming Interface , p1280
+         */
+        if (setsockopt(listening_socket_descriptor, SOL_SOCKET, SO_REUSEADDR, &optionValue, sizeof(int)) == ERROR) {
+            fprintf(stderr, "%s: getaddrinfo(): %s\n", programName, gai_strerror(result));
+            freeaddrinfo(serverCandidate);
+            freeaddrinfo(addrInfoResult);
+            close(listening_socket_descriptor);
+            exit(EXIT_FAILURE);
+        }
+        
+        if (bind(listening_socket_descriptor, serverCandidate->ai_addr, serverCandidate->ai_addrlen) == ERROR) {
+            /* could not bind, try next addrInfo */
+            INFO("main()", "failed to bind %s", "");
+            continue;
+        }
+        
+        /* if we came here we had no error, so let's go on
+        */
+        break;
+    }
 
+    INFO("main()", "freeing addrInfoResult %s", "");
+    freeaddrinfo(addrInfoResult);
+    
+    if (serverCandidate == NULL) {
+        fprintf(stderr, "%s: failed to bind: %s\n", programName, strerror(errno));
+        close(listening_socket_descriptor);
+        exit(EXIT_FAILURE);
+    }
 
-	INFO("main()", "preparing sigaction() %s", "");
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = sigchld_handler;
-    sigaction(SIGCHLD, &sa, NULL);
+    INFO("main()", "start listening %s", "");
+    
+    if (listen(listening_socket_descriptor, BACKLOG_SIZE) == ERROR) {
+        fprintf(stderr, "%s: failed to listen: %s\n", programName, strerror(errno));
+        close(listening_socket_descriptor);
+        exit(EXIT_FAILURE);
+    }
+    
+    INFO("main()", "attaching signal handler %s", "");
+    struct sigaction onSignalAction;
+    memset(&onSignalAction, 0, sizeof(onSignalAction));
+    
+    onSignalAction.sa_handler = handleChildSignals;
+    onSignalAction.sa_flags = SA_RESTART;
+    
+    /* register handler for SIGCHLD: child status has changed */
+    if (sigaction(SIGCHLD, &onSignalAction, NULL) == ERROR) {
+        fprintf(stderr, "%s: failed to create signal handler: %s\n", programName, strerror(errno));
+        close(listening_socket_descriptor);
+        exit(EXIT_FAILURE);
+    }
+    
+    waitForClients(listening_socket_descriptor);
+}
 
+void waitForClients(int listening_socket_descriptor) {
+    int client;
+    socklen_t addressSize;
+    struct sockaddr_storage clientAddress;
 
-    /* endless listening-loop 
-       this loop waits for client-connections.
-       if a client is connectd it forks into another
-       subprocess.
-     */
-	INFO("main()", "starting loop for client acception %s", "");
-    while(1)
-    {   
-            clientLen = sizeof(peerAddress);
-			INFO("main()", "clientLen = %d", clientLen);
-
-			INFO("main()", "accepting connection from client %s", "");
-            cfd = accept(sfd, (struct sockaddr *) &peerAddress, &clientLen);
-            if(cfd < 0)
-            {
-                /*
-                   withouth this we would recieve:
-                "accept() error..: Interrupted system call" after
-                each client disconnect. this happens because SIGCHLD
-                blocks our parent-accept(). 
-                 */
-                if (errno == EINTR)
-                    continue;
-
-                    perror("accept() error..");
-                    close(sfd);
-                    exit(EXIT_FAILURE);
-            }
-
-			INFO("main()", "create subprocess: fork() %s", "");
-            childpid = fork();
-            if(childpid < 0)
-            {
-                perror("fork() failed");
-				close(sfd);
+    INFO("waitForClients()", "waiting for client connections %s", "");
+    while (1 == 1) {
+        addressSize = sizeof(clientAddress);
+        client = accept(listening_socket_descriptor, (struct sockaddr *)&clientAddress, &addressSize);
+        INFO("waitForClients()", "accepted client %s", "");
+        if (client < SUCCESS) {
+            if (errno != EINTR) {
+                fprintf(stderr, "%s: failed to accept client: %s\n", programName, strerror(errno));
+                close(listening_socket_descriptor);
                 exit(EXIT_FAILURE);
             }
-
-			INFO("main()", "start cild-subprocess %s", "");
-            if( childpid  == 0 )
-            {
-                close(sfd);
-                handle_client(cfd);
+            else {
+                /* handle next one, we've been interrupted by a signal */
+                INFO("waitForClients()", "interrupted by signal %s", "");
+                continue;
             }
-			INFO("main()", "client has PID=%i", childpid);
-
-			INFO("main()", "continue server %s", "");
-
-			INFO("main()", "closing client filedescriptor %s", "");
-            close(cfd);
+        }
+        
+        INFO("waitForClients()", "forking %s", "");
+        switch (fork()) {
+            case ERROR: {
+                fprintf(stderr, "%s: failed to fork: %s\n", programName, strerror(errno));
+                close(client);
+                close(listening_socket_descriptor);
+                exit(EXIT_FAILURE);
+            }
+            /* child process */
+            case SUCCESS:
+                if (close(listening_socket_descriptor) != SUCCESS) {
+                    fprintf(stderr, "%s: failed to close listening fd: %s\n", programName, strerror(errno));
+                    close(client);
+                    exit(EXIT_FAILURE);
+                }
+                startClientInteraction(client);
+                break;
+            /* parent process */
+            default: {
+                if (close(client) != SUCCESS) {
+                    fprintf(stderr, "%s: failed to close client fd: %s\n", programName, strerror(errno));
+                    close(listening_socket_descriptor);
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            }
+        }
     }
-
-    return EXIT_SUCCESS;
 }
 
-void printUsage(const char *programName) {
-	fprintf(stderr, "usage: %s option:\n", programName);
-	fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
-	exit(EXIT_FAILURE);	
+void startClientInteraction(int client) {
+    /* connect STDIN and STDOUT to client */
+    if (dup2(client, STDIN_FILENO) == ERROR || dup2(client, STDOUT_FILENO) == ERROR) {
+        fprintf(stderr, "%s: failed to duplicate fd for client connection: %s\n", programName, strerror(errno));
+        close(client);
+        exit(EXIT_FAILURE);
+    }
+    
+    if (close(client) != SUCCESS) {
+        fprintf(stderr, "%s: failed to close client connection: %s\n", programName, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    
+    (void)execl(PATH_TO_SERVER_LOGIC, SERVER_LOGIC, (char *)NULL);
+    
+    /* if execl fails */
+    _exit(127);
 }
 
-int convertString2Int(const char *string) {
-	INFO("convertString2Int()", "convert port string (%s) to interger", string);
 
-	char *endptr;
-	long val;
-
-	errno = 0;
-
-	val = strtol(string, &endptr, 10);
-
-	if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
-		|| (errno != 0 && val == 0)) {
-			perror("strtol");
-			exit(EXIT_FAILURE);
-	}
-
-	if (endptr == string) {
-		fprintf(stderr, "No digits were found\n");
-		exit(EXIT_FAILURE);
-	}
-
-	INFO("convertString2Int()", "converted string %s to integer %ld", string, val);
-	return val;
-
-}
-
-void sigchld_handler(int signo) {
-	signo = signo;
+void handleChildSignals(int signalNumber)
+{
     int status;
     pid_t pid;
-
-	INFO("sigchld_handler()", "entered sigchld_handler %s", "");
-    /*
-       -1 means that we wait until the first process is terminated
-       WNOHANG tells the kernel not to block if there are no terminated
-       child-processes.
-     */
-    while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
-    {
-		INFO("waitpid()", "%i exited with %i\n", pid, WEXITSTATUS(status));
+    
+    /* get rid of compiler warnings */
+    signalNumber = signalNumber;
+  
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        /* do something very clever while waiting for process to exit :-) */
     }
 }
 
-void handle_client(int cfd) {
-
-	INFO("handle_client()", "twisting filedescriptors to STDIN and STDOUT %s", "");
-	if ((dup2(cfd, STDIN_FILENO) == ERROR) || (dup2(cfd, STDOUT_FILENO) == ERROR)) {
-		perror("dub2() failed");
-		close(cfd);
-		exit(EXIT_FAILURE);
-	}
-
-	INFO("handle_client()", "closing client fd %i", cfd);
-	if(close(cfd) != SUCCESS) {
-		perror("close() failed");
-		exit(EXIT_FAILURE);
-	}
-
-	INFO("handle_client()", "starting simple_message_server_logic %s", "");
-	execl("/usr/local/bin/simple_message_server_logic", "simple_message_server_logic", (char *) NULL);
+const char *getTcpPort(int argc, const char *argv[]) {
+    
+    static struct option options[] = {
+        {"port", required_argument, 0, 'p'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+    
+    char *tcpPort = NULL;
+    int option = 0;
+    int index =0;
+    
+    while ((option = getopt_long(argc, (char ** const) argv, "p:h", options, &index)) != ERROR) {
+        INFO("getTcpPort()", "parsing option %c with argument %s", option, optarg);
+        switch(option) {
+            case 'p':
+                tcpPort = optarg;
+                break;
+            default:
+                printUsage();
+                return NULL;
+        }
+    }
+    
+    return tcpPort;
 }
+
+void printUsage() {
+    fprintf(stderr, "usage: %s option:\n", programName);
+    fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
+    exit(EXIT_FAILURE);
+}
+
+    
