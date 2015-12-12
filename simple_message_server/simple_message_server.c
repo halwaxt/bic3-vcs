@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
 #include <unistd.h>
@@ -27,102 +28,187 @@
 #define DONE 2
 
 /* maximum length for the queue of pending connections */
-#define LISTENQ 1024
+#define BACKLOG_SIZE 10
+
+/* handling interaction with clients */
+#define PATH_TO_SERVER_LOGIC "/usr/local/bin/simple_message_server_logic"
+#define SERVER_LOGIC "simple_message_server_logic"
 
 #define INFO(function, M, ...) \
 	if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
 
-static int verbose;
+//static int verbose;
 static const char *programName;
 
 void printUsage(const char *programName);
-void sigchld_handler(int signo);
-int convertString2Int(const char *string);
-void handle_client(int cfd);
+void handleChildSignals(int signalNumber);
+void waitForClients(int listening_socket_descriptor);
+void startClientInteraction(int client_socket_descriptor);
 
 int main(int argc, const char * argv[]) {
-
-	verbose = 1;
-	programName = argv[0];
-
-	int opt = 0;
-	int port = -1;
-	const char *portstring;
-  
-
-	INFO("main()", "argc = %d", argc);
-	if(argc < 2) {
-		printUsage(programName);
-	}
-
-	INFO("main()", "start commanline parsing %s", "");
-	static struct option long_options[] = {
-		{"port", required_argument, 0, 'p'},
-		{"help", no_argument, 0, 'h'},
-		{0, 0, 0, 0}
-	};
-	int long_index =0;
-	while ((opt = getopt_long(argc, (char ** const) argv, "p:v", long_options, &long_index)) != -1) {
-        INFO("found param %s", opt);
-		switch(opt) {
-			case 'p':
-				portstring = optarg;
-				INFO("getopt_long()", "port=%s", portstring);
-				port = convertString2Int(portstring);
-				break;
-			case 'v':
-				verbose = 1;
-				break;
-			default:
-				printUsage(programName);
-		}
-	}
-
     
-    return EXIT_SUCCESS;
-}
-
-void printUsage(const char *programName) {
-	fprintf(stderr, "usage: %s option:\n", programName);
-	fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
-	exit(EXIT_FAILURE);	
-}
-
-
-
-void sigchld_handler(int signo) {
-	signo = signo;
-    int status;
-    pid_t pid;
-
-	INFO("sigchld_handler()", "entered sigchld_handler %s", "");
-    /*
-       -1 means that we wait until the first process is terminated
-       WNOHANG tells the kernel not to block if there are no terminated
-       child-processes.
-     */
-    while( (pid = waitpid(-1, &status, WNOHANG)) > 0)
+    programName = argv[0];
+    char *tcpPort = "6799";
+    
+    struct addrinfo *addrInfoResult, hints;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    
+    int result;
+    if ((result = getaddrinfo(NULL, tcpPort, &hints, &addrInfoResult)))
     {
-		INFO("waitpid()", "%i exited with %i\n", pid, WEXITSTATUS(status));
+        fprintf(stderr, "%s: getaddrinfo(): %s\n", programName, gai_strerror(result));
+        exit(EXIT_FAILURE);
+    }
+    
+    int listening_socket_descriptor = 0;
+    struct addrinfo *serverCandidate;
+    int optionValue = 1;
+    
+    /* we use the first addrinfo which works */
+    for (serverCandidate = addrInfoResult; serverCandidate != NULL; serverCandidate = serverCandidate->ai_next) {
+        listening_socket_descriptor = socket(serverCandidate->ai_family,
+                       serverCandidate->ai_socktype, serverCandidate->ai_protocol);
+        
+        if (listening_socket_descriptor == ERROR) continue;
+        
+        /* Setting the SO_REUSEADDR option means that we can bind a socket to a local port even if another TCP is bound to 
+         the same port in either of the scenarios described at the start of this section. Most TCP servers should enable 
+         this option.
+         The Linux Programming Interface , p1280
+         */
+        if (setsockopt(listening_socket_descriptor, SOL_SOCKET, SO_REUSEADDR, &optionValue, sizeof(int)) == ERROR) {
+            fprintf(stderr, "%s: getaddrinfo(): %s\n", programName, gai_strerror(result));
+            freeaddrinfo(serverCandidate);
+            freeaddrinfo(addrInfoResult);
+            close(listening_socket_descriptor);
+            exit(EXIT_FAILURE);
+        }
+        
+        if (bind(listening_socket_descriptor, serverCandidate->ai_addr, serverCandidate->ai_addrlen) == ERROR) {
+            /* could not bind, try next addrInfo */
+            continue;
+        }
+        
+        /* if we came here we had no error, so let's go on
+        */
+        break;
+    }
+
+    freeaddrinfo(addrInfoResult);
+    
+    if (serverCandidate == NULL) {
+        fprintf(stderr, "%s: failed to bind: %s\n", programName, strerror(errno));
+        close(listening_socket_descriptor);
+        exit(EXIT_FAILURE);
+    }
+
+    freeaddrinfo(serverCandidate);
+    
+    if (listen(listening_socket_descriptor, BACKLOG_SIZE) == ERROR) {
+        fprintf(stderr, "%s: failed to listen: %s\n", programName, strerror(errno));
+        close(listening_socket_descriptor);
+        exit(EXIT_FAILURE);
+    }
+    
+    struct sigaction onSignalAction;
+    memset(&onSignalAction, 0, sizeof(onSignalAction));
+    
+    onSignalAction.sa_handler = handleChildSignals;
+    onSignalAction.sa_flags = SA_RESTART;
+    
+    /* register handler for SIGCHLD: child status has changed */
+    if (sigaction(SIGCHLD, &onSignalAction, NULL) == ERROR) {
+        fprintf(stderr, "%s: failed to create signal handler: %s\n", programName, strerror(errno));
+        close(listening_socket_descriptor);
+        exit(EXIT_FAILURE);
+    }
+    
+    waitForClients(listening_socket_descriptor);
+}
+
+void waitForClients(int listening_socket_descriptor) {
+    int client;
+    struct sockaddr_storage clientAddress;
+
+    while (1 == 1) {
+        
+        client = accept(listening_socket_descriptor, (struct sockaddr *)&clientAddress, sizeof(clientAddress));
+        if (client < SUCCESS) {
+            if (errno != EINTR) {
+                fprintf(stderr, "%s: failed to accept client: %s\n", programName, strerror(errno));
+                close(listening_socket_descriptor);
+                exit(EXIT_FAILURE);
+            }
+            else {
+                /* handle next one, we've been interrupted by a signal */
+                continue;
+            }
+        }
+        
+        switch (fork()) {
+            case ERROR: {
+                fprintf(stderr, "%s: failed to fork: %s\n", programName, strerror(errno));
+                close(client);
+                close(listening_socket_descriptor);
+                exit(EXIT_FAILURE);
+            }
+            /* child process */
+            case SUCCESS:
+                if (close(listening_socket_descriptor) != SUCCESS) {
+                    fprintf(stderr, "%s: failed to close listening fd: %s\n", programName, strerror(errno));
+                    close(client);
+                    exit(EXIT_FAILURE);
+                }
+                startClientInteraction(client);
+                break;
+            /* parent process */
+            default: {
+                if (close(client) != SUCCESS) {
+                    fprintf(stderr, "%s: failed to close client fd: %s\n", programName, strerror(errno));
+                    close(listening_socket_descriptor);
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            }
+        }
     }
 }
 
-void handle_client(int cfd) {
-
-	INFO("handle_client()", "twisting filedescriptors to STDIN and STDOUT %s", "");
-	if ((dup2(cfd, STDIN_FILENO) == ERROR) || (dup2(cfd, STDOUT_FILENO) == ERROR)) {
-		perror("dub2() failed");
-		close(cfd);
-		exit(EXIT_FAILURE);
-	}
-
-	INFO("handle_client()", "closing client fd %i", cfd);
-	if(close(cfd) != SUCCESS) {
-		perror("close() failed");
-		exit(EXIT_FAILURE);
-	}
-
-	INFO("handle_client()", "starting simple_message_server_logic %s", "");
-	execl("/usr/local/bin/simple_message_server_logic", "simple_message_server_logic", (char *) NULL);
+void startClientInteraction(int client) {
+    /* connect STDIN and STDOUT to client */
+    if (dup2(client, STDIN_FILENO) == ERROR || dup2(client, STDOUT_FILENO) == ERROR) {
+        fprintf(stderr, "%s: failed to duplicate fd for client connection: %s\n", programName, strerror(errno));
+        close(client);
+        exit(EXIT_FAILURE);
+    }
+    
+    if (close(client) != SUCCESS) {
+        fprintf(stderr, "%s: failed to close client connection: %s\n", programName, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    
+    (void)execl(PATH_TO_SERVER_LOGIC, SERVER_LOGIC, (char *)NULL);
+    
+    /* if execl fails */
+    _exit(127);
 }
 
+
+void handleChildSignals(int signalNumber)
+{
+    int status;
+    pid_t pid;
+    
+    /* get rid of compiler warnings */
+    signalNumber = signalNumber;
+  
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        /* do something very clever while waiting for process to exit :-) */
+    }
+}
+
+    
