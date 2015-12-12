@@ -41,15 +41,27 @@
 static const char *programName;
 static int verbose = 1;
 
-void printUsage(const char *programName);
+void printUsage();
 void handleChildSignals(int signalNumber);
 void waitForClients(int listening_socket_descriptor);
 void startClientInteraction(int client_socket_descriptor);
+const char *getTcpPort(int argc, const char *argv[]);
 
 int main(int argc, const char * argv[]) {
-    printf("using %d arguments\n", argc);
+    
+    INFO("main()", "argc = %d", argc);
+    if(argc < 2) {
+        printUsage(programName);
+        exit(EXIT_FAILURE);
+    }
+    
     programName = argv[0];
-    char *tcpPort = "6799";
+    const char *tcpPort = getTcpPort(argc, argv);
+    if (tcpPort == NULL) {
+        exit(EXIT_FAILURE);
+    }
+    
+    INFO("main()", "using tcp port %s", tcpPort);
     
     struct addrinfo *addrInfoResult, hints;
     memset(&hints, 0, sizeof(hints));
@@ -62,7 +74,6 @@ int main(int argc, const char * argv[]) {
     if ((result = getaddrinfo(NULL, tcpPort, &hints, &addrInfoResult)) != SUCCESS)
     {
         fprintf(stderr, "%s: getaddrinfo(): %s\n", programName, gai_strerror(result));
-        
         exit(EXIT_FAILURE);
     }
     
@@ -115,8 +126,7 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    INFO("main()", "freeing serverCandidate %s", "");
-    freeaddrinfo(serverCandidate);
+    INFO("main()", "start listening %s", "");
     
     if (listen(listening_socket_descriptor, BACKLOG_SIZE) == ERROR) {
         fprintf(stderr, "%s: failed to listen: %s\n", programName, strerror(errno));
@@ -225,6 +235,37 @@ void handleChildSignals(int signalNumber)
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         /* do something very clever while waiting for process to exit :-) */
     }
+}
+
+const char *getTcpPort(int argc, const char *argv[]) {
+    
+    static struct option long_options[] = {
+        {"port", required_argument, 0, 'p'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+    
+    char *tcpPort = NULL;
+    int opt = 0;
+    int long_index =0;
+    
+    while ((opt = getopt_long(argc, (char ** const) argv, "p:v", long_options, &long_index)) != -1) {
+        switch(opt) {
+            case 'p':
+                tcpPort = optarg;
+                INFO("getTcpPort()", "tcp port=%s", tcpPort);
+            default:
+                printUsage();
+        }
+    }
+    
+    return tcpPort;
+}
+
+void printUsage() {
+    fprintf(stderr, "usage: %s option:\n", programName);
+    fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
+    exit(EXIT_FAILURE);
 }
 
     
