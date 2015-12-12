@@ -39,6 +39,7 @@
 
 //static int verbose;
 static const char *programName;
+static int verbose = 1;
 
 void printUsage(const char *programName);
 void handleChildSignals(int signalNumber);
@@ -65,6 +66,8 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
     
+    INFO("main()", "getaddrinfo succeeded %s", "");
+    
     int listening_socket_descriptor = 0;
     struct addrinfo *serverCandidate;
     int optionValue = 1;
@@ -74,7 +77,10 @@ int main(int argc, const char * argv[]) {
         listening_socket_descriptor = socket(serverCandidate->ai_family,
                        serverCandidate->ai_socktype, serverCandidate->ai_protocol);
         
-        if (listening_socket_descriptor == ERROR) continue;
+        if (listening_socket_descriptor == ERROR) {
+            INFO("main()", "failed creating a socket for %d, %d, %d", serverCandidate->ai_family, serverCandidate->ai_socktype, serverCandidate->ai_protocol);
+            continue;
+        }
         
         /* Setting the SO_REUSEADDR option means that we can bind a socket to a local port even if another TCP is bound to 
          the same port in either of the scenarios described at the start of this section. Most TCP servers should enable 
@@ -91,6 +97,7 @@ int main(int argc, const char * argv[]) {
         
         if (bind(listening_socket_descriptor, serverCandidate->ai_addr, serverCandidate->ai_addrlen) == ERROR) {
             /* could not bind, try next addrInfo */
+            INFO("main()", "failed to bind %s", "");
             continue;
         }
         
@@ -99,6 +106,7 @@ int main(int argc, const char * argv[]) {
         break;
     }
 
+    INFO("main()", "freeing addrInfoResult %s", "");
     freeaddrinfo(addrInfoResult);
     
     if (serverCandidate == NULL) {
@@ -107,6 +115,7 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    INFO("main()", "freeing serverCandidate %s", "");
     freeaddrinfo(serverCandidate);
     
     if (listen(listening_socket_descriptor, BACKLOG_SIZE) == ERROR) {
@@ -115,6 +124,7 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
     
+    INFO("main()", "attaching signal handler %s", "");
     struct sigaction onSignalAction;
     memset(&onSignalAction, 0, sizeof(onSignalAction));
     
@@ -136,9 +146,11 @@ void waitForClients(int listening_socket_descriptor) {
     socklen_t addressSize;
     struct sockaddr_storage clientAddress;
 
+    INFO("waitForClients()", "waiting for client connections %s", "");
     while (1 == 1) {
         addressSize = sizeof(clientAddress);
         client = accept(listening_socket_descriptor, (struct sockaddr *)&clientAddress, &addressSize);
+        INFO("waitForClients()", "accepted client %s", "");
         if (client < SUCCESS) {
             if (errno != EINTR) {
                 fprintf(stderr, "%s: failed to accept client: %s\n", programName, strerror(errno));
@@ -147,10 +159,12 @@ void waitForClients(int listening_socket_descriptor) {
             }
             else {
                 /* handle next one, we've been interrupted by a signal */
+                INFO("waitForClients()", "interrupted by signal %s", "");
                 continue;
             }
         }
         
+        INFO("waitForClients()", "forking %s", "");
         switch (fork()) {
             case ERROR: {
                 fprintf(stderr, "%s: failed to fork: %s\n", programName, strerror(errno));
