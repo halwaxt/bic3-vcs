@@ -46,21 +46,22 @@ void waitForClients(int listening_socket_descriptor);
 void startClientInteraction(int client_socket_descriptor);
 
 int main(int argc, const char * argv[]) {
-    
+    printf("using %d arguments\n", argc);
     programName = argv[0];
     char *tcpPort = "6799";
     
     struct addrinfo *addrInfoResult, hints;
-    memset(&hints, 0, sizeof(struct addrinfo));
+    memset(&hints, 0, sizeof(hints));
     
-    hints.ai_family = PF_UNSPEC;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     
     int result;
-    if ((result = getaddrinfo(NULL, tcpPort, &hints, &addrInfoResult)))
+    if ((result = getaddrinfo(NULL, tcpPort, &hints, &addrInfoResult)) != SUCCESS)
     {
         fprintf(stderr, "%s: getaddrinfo(): %s\n", programName, gai_strerror(result));
+        
         exit(EXIT_FAILURE);
     }
     
