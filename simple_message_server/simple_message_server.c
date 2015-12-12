@@ -132,11 +132,12 @@ int main(int argc, const char * argv[]) {
 
 void waitForClients(int listening_socket_descriptor) {
     int client;
+    socklen_t addressSize;
     struct sockaddr_storage clientAddress;
 
     while (1 == 1) {
-        
-        client = accept(listening_socket_descriptor, (struct sockaddr *)&clientAddress, sizeof(clientAddress));
+        addressSize = sizeof(clientAddress);
+        client = accept(listening_socket_descriptor, (struct sockaddr *)&clientAddress, &addressSize);
         if (client < SUCCESS) {
             if (errno != EINTR) {
                 fprintf(stderr, "%s: failed to accept client: %s\n", programName, strerror(errno));
