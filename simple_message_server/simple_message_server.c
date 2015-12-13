@@ -1,10 +1,26 @@
-//
-//  main.c
-//  simple_message_server
-//
-//  Created by Thomas {Halwax,Zeitinger} on 24.11.15.
-//  Copyright © 2015 Technikum Wien. All rights reserved.
-//
+/* vim: set ts=4 sw=4 sts=4 et : */
+/**
+ * @file simple_message_server_cs.c
+ * VCS - Tcp/Ip Exercise - server programm listens on a given port (command
+ * argument '-p'), forks off new child processes on incoming tcp-connections and
+ * starts the 'simple_message_server_logic'
+ *
+ * @author Thomas Halwax <ic14b050@technikum-wien.at>
+ * @author Thomas Zeitinger <ic14b033@technikum-wien.at>
+ * @date 2015/12/13
+ *
+ * @version $Revision: 1.0 $
+ *
+ * @todo everything is done
+ *
+ * URL: $HeadURL$
+ *
+ * Last Modified: $Author: thomas $
+ */
+
+/*
+ * --------------------------------------------------------------- includes --
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +39,10 @@
 #include <limits.h>
 #include <signal.h>
 
+/*
+ * ---------------------------------------------------------------- defines --
+ */
+
 #define ERROR -1
 #define SUCCESS 0
 #define DONE 2
@@ -37,9 +57,16 @@
 #define INFO(function, M, ...) \
 	if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
 
-//static int verbose;
+/*
+ * ---------------------------------------------------------------- globals --
+ */
+
 static const char *programName;
 static int verbose = 0;
+
+/*
+ * ------------------------------------------------------------- prototypes --
+ */
 
 void printUsage(void);
 void handleChildSignals(int signalNumber);
@@ -47,6 +74,24 @@ void waitForClients(int listening_socket_descriptor);
 void startClientInteraction(int client_socket_descriptor);
 const char *getTcpPort(int argc, const char *argv[]);
 
+/*
+ * -------------------------------------------------------------- functions --
+ */
+
+/**
+ * @brief       Main function
+ *
+ * This function is the main entry point of the program. -
+ * it listens on a port provided by argv and accepts incoming tcp-connections
+ *
+ * \param argc the number of arguments
+ * \param argv the arguments itselves (including the program name in argv[0])
+ *
+ * @return    exit status of program
+ * @retval    EXIT_FAILURE      Program terminated due to a failure
+ * @retval    EXIT_SUCCESS      Program terminated successfully
+ *
+ */
 int main(int argc, const char * argv[]) {
     
     programName = argv[0];
@@ -55,7 +100,6 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
     
-
     const char *tcpPort = getTcpPort(argc, argv);
     if (tcpPort == NULL) {
         exit(EXIT_FAILURE);
@@ -149,8 +193,22 @@ int main(int argc, const char * argv[]) {
     }
     
     waitForClients(listening_socket_descriptor);
+
+    /* not needed, here for convention */
+    exit(EXIT_SUCCESS);
 }
 
+/**
+ * @brief waitForClients
+ *
+ * Signal handling connections to client
+ *
+ * \param listening_socket_descriptor listening socket descriptor
+ *
+ * \return void
+ * \retval void
+ *
+ */
 void waitForClients(int listening_socket_descriptor) {
     int client;
     socklen_t addressSize;
@@ -204,6 +262,17 @@ void waitForClients(int listening_socket_descriptor) {
     }
 }
 
+/**
+ * @brief startClientInteraction
+ *
+ * Using external SERVER_LOGIC
+ *
+ * \param client client talking to the server
+ *
+ * \return void
+ * \retval void
+ *
+ */
 void startClientInteraction(int client) {
     /* connect STDIN and STDOUT to client */
     if (dup2(client, STDIN_FILENO) == ERROR || dup2(client, STDOUT_FILENO) == ERROR) {
@@ -223,7 +292,17 @@ void startClientInteraction(int client) {
     _exit(127);
 }
 
-
+/**
+ * @brief handleChildSignals
+ *
+ * Signal handling connections to client
+ *
+ * \param signum signalnumber is not used
+ *
+ * \return void
+ * \retval void
+ *
+ */
 void handleChildSignals(int signalNumber)
 {
     int status;
@@ -237,6 +316,18 @@ void handleChildSignals(int signalNumber)
     }
 }
 
+/**
+ * @brief getTcpPort
+ *
+ * Signal handling connections to client
+ *
+ * \param argc the number of arguments
+ * \param argv the arguments itselves (including the program name in argv[0])
+ *
+ * \return void
+ * \retval void
+ *
+ */
 const char *getTcpPort(int argc, const char *argv[]) {
     
     static struct option options[] = {
@@ -264,10 +355,20 @@ const char *getTcpPort(int argc, const char *argv[]) {
     return tcpPort;
 }
 
+/**
+ * @brief printUsage
+ *
+ * print usage parameter to stderr
+ *
+ * \param none
+ *
+ * \return void
+ * \retval void
+ *
+ */
 void printUsage() {
     fprintf(stderr, "usage: %s option:\n", programName);
     fprintf(stderr, "options:\n\t-p, --port <port>\n\t-h, --help\n");
     exit(EXIT_FAILURE);
 }
 
-    
