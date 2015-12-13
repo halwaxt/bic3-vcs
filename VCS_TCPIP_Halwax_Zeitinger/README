@@ -1,0 +1,6 @@
+
+Es gibt nicht wirklich [tm] etwas zu beachten.
+
+copy simple_message_client_commandline_handling.o into dir
+make
+
