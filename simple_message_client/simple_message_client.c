@@ -1,10 +1,26 @@
-//
-//
-//  simple_message_client
-//
-//  Created by Thomas {Halwax,Zeitinger} on 24.11.15.
-//  Copyright © 2015 Technikum Wien. All rights reserved.
-//
+/* vim: set ts=4 sw=4 sts=4 et : */
+/**
+ * @file simple_message_client_cs.c
+ * VCS - Tcp/Ip Exercise - client program connects to simple_message_server on a
+ * given port, and sends bulletin board messages. After sending, connection is 
+ * shutdown and response is stored local.
+ *
+ * @author Thomas Halwax <ic14b050@technikum-wien.at>
+ * @author Thomas Zeitinger <ic14b033@technikum-wien.at>
+ * @date 2015/12/13
+ *
+ * @version $Revision: 1.0 $
+ *
+ * @todo everything is done
+ *
+ * URL: $HeadURL$
+ *
+ * Last Modified: $Author: thomas $
+ */
+
+/*
+ * --------------------------------------------------------------- includes --
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +34,10 @@
 #include <stdarg.h>
 #include "simple_message_client_commandline_handling.h"
 
+/*
+ * ---------------------------------------------------------------- defines --
+ */
+
 #define ERROR -1
 #define SUCCESS 0
 #define DONE 2
@@ -25,16 +45,39 @@
 #define INFO(function, M, ...) \
 		if (verbose) fprintf(stdout, "%s [%s, %s, line %d]: " M "\n", programName, __FILE__, function, __LINE__, ##__VA_ARGS__)
 
-void showUsage(FILE *stream, const char *cmnd, int exitcode);
-int connectToServer(const char *server, const char *port, int *socketDescriptor);
-int sendData(FILE *target, const char *key, const char *payload);
-int checkServerResponseStatus(FILE *source, int *status);
-int transferFile(FILE *source);
-int getOutputFileLength(FILE *source, unsigned long *value);
-int getOutputFileName(FILE *source, char **value);
+/*
+ * ---------------------------------------------------------------- globals --
+ */
 
 static const char *programName;
 static int verbose;
+
+/*
+ * ------------------------------------------------------------- prototypes --
+ */
+
+void showUsage(FILE *stream, const char *cmnd, int exitcode);
+static int connectToServer(const char *server, const char *port, int *socketDescriptor);
+static int sendData(FILE *target, const char *key, const char *payload);
+static int checkServerResponseStatus(FILE *source, int *status);
+static int transferFile(FILE *source);
+static int getOutputFileLength(FILE *source, unsigned long *value);
+static int getOutputFileName(FILE *source, char **value);
+
+/**
+ * @brief       Main function
+ *
+ * This function is the main entry point of the program. -
+ * it opens a connection to specified server and sends and receives data
+ *
+ * \param argc the number of arguments
+ * \param argv the arguments itselves (including the program name in argv[0])
+ *
+ * @return    exit status of program
+ * @retval    EXIT_FAILURE      Program terminated due to a failure
+ * @retval    EXIT_SUCCESS      Program terminated successfully
+ *
+ */
 
 int main(int argc, const char * argv[]) {
 
@@ -50,14 +93,14 @@ int main(int argc, const char * argv[]) {
     
     INFO("main()", "Using the following options: server=\"%s\", port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"", server, port, user, image_url, message);
 	
-	INFO("main()", "connecting to server=\"%s\", port=\"%s\"", server, port);
+    INFO("main()", "connecting to server=\"%s\", port=\"%s\"", server, port);
     int sfd = 0;
     if (connectToServer(server, port, &sfd) != SUCCESS) {
         fprintf(stderr, "%s: connectToServer() failed for server %s and port %s: %s\n", programName, server, port, strerror(errno));
         exit(errno);
     }
     
-	INFO("main()", "open file descriptor for writing %s", "");
+    INFO("main()", "open file descriptor for writing %s", "");
     errno = SUCCESS;
     FILE *toServer = fdopen(sfd, "w");
     if (toServer == NULL) {
@@ -145,11 +188,26 @@ int main(int argc, const char * argv[]) {
     close(backupOfSfd);
     INFO("main()", "closed connection to server %s", server);
     INFO("main()", "bye %s!", user);
-    exit(EXIT_SUCCESS);
+    exit(status);
 }
 
+/**
+ * @brief connectToServer
+ *
+ * Connect to server
+ * Writes Errors to stderr
+ *
+ * \param server server address for connecting to
+ * \param port port from the server is given
+ * \param socketDescriptor file descriptor for handling the connection
+ *
+ * \return int
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
 
-int connectToServer(const char *server, const char *port, int *socketDescriptor) {
+static int connectToServer(const char *server, const char *port, int *socketDescriptor) {
     struct addrinfo hints;
     struct addrinfo *result, *rp;
     int sfd = -1;
@@ -201,8 +259,21 @@ int connectToServer(const char *server, const char *port, int *socketDescriptor)
 
 }
 
-
-int sendData(FILE *target, const char *key, const char *payload) {
+/**
+ * @brief sendData
+ *
+ * Send data to opend connection
+ *
+ * \param FILE opened file for writing to
+ * \param key keyvalue from communication protocol
+ * \param payload data
+ *
+ * \return int
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
+static int sendData(FILE *target, const char *key, const char *payload) {
     if (fprintf(target, "%s", key) < 0) return ERROR;
     if (fprintf(target, "%s", payload) < 0) return ERROR;
     if (fprintf(target, "\n") < 0) return ERROR;
@@ -211,7 +282,21 @@ int sendData(FILE *target, const char *key, const char *payload) {
     return SUCCESS;
 }
 
-int checkServerResponseStatus(FILE *source, int *status) {
+/**
+ * @brief checkServerResponseStatus
+ *
+ * searching key "status=" in data from server
+ *
+ * \param source opened file for reading from
+ * \param status pointer for writing status into
+ *
+ * \return int
+ * \retval DONE on EOF
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
+static int checkServerResponseStatus(FILE *source, int *status) {
     /* read line from source */
     /* compare n chars with status=0 */
     char *line = NULL;
@@ -246,7 +331,21 @@ int checkServerResponseStatus(FILE *source, int *status) {
     return SUCCESS;
 }
 
-int getOutputFileName(FILE *source, char **value) {
+/**
+ * @brief getOutputFileName
+ *
+ * searching key "file=" in data from server
+ *
+ * \param source opened file for reading from
+ * \param value pointer for writing filename into
+ *
+ * \return int
+ * \retval DONE on EOF
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
+static int getOutputFileName(FILE *source, char **value) {
     char *line = NULL;
     char *fileName = NULL;
     size_t sizeOfLine = 0;
@@ -295,7 +394,21 @@ int getOutputFileName(FILE *source, char **value) {
     return SUCCESS;
 }
 
-int getOutputFileLength(FILE *source, unsigned long *value) {
+/**
+ * @brief getOutputFileLength
+ *
+ * searching key "len=" in data from server
+ *
+ * \param source opened file for reading from
+ * \param value pointer for writing lenght into
+ *
+ * \return int
+ * \retval DONE on EOF
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
+static int getOutputFileLength(FILE *source, unsigned long *value) {
     char *line = NULL;
     size_t sizeOfLine = 0;
     int found = 0;
@@ -328,7 +441,19 @@ int getOutputFileLength(FILE *source, unsigned long *value) {
     return SUCCESS;
 }
 
-int transferFile(FILE *source) {
+/**
+ * @brief transferFile
+ *
+ * writing data from server to local file
+ *
+ * \param source opened file for reading from
+ *
+ * \return int
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
+static int transferFile(FILE *source) {
     char *fileName = NULL;
     unsigned long fileLength = 0;
     int result = 0;
@@ -390,7 +515,20 @@ int transferFile(FILE *source) {
     return SUCCESS;
 }
 
-
+/**
+ * @brief showUsage
+ *
+ * print usage parameter
+ *
+ * \param stream stream to write the usage information to
+ * \param cmnd a string containing the name of the executable
+ * \param exitcode the  exit code to be used in the call to exit(3) for terminating the program
+ *
+ * \return int
+ * \retval SUCCESS on Success
+ * \retval ERROR on Error
+ *
+ */
 void showUsage(FILE *stream, const char *cmnd, int exitcode) {
     fprintf(stream, "%s: %s\n", cmnd, "-s server -p port -u user [-i image URL] -m message [-v] [-h]");
     exit(exitcode);
