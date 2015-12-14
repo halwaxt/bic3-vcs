@@ -53,26 +53,7 @@ simple_message_client: $(OBJECTS_CLIENT)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 clean:
-	$(RM) *.o *~ simple_message_client simple_message_server 
-
-distclean: clean
-	$(RM) -r doc
-
-doc: html pdf
-
-html:
-	$(DOXYGEN) doxygen.dcf
-
-pdf: html
-	$(CD) doc/pdf && \
-	$(MV) refman.tex refman_save.tex && \
-	$(GREP) -v $(EXCLUDE_PATTERN) refman_save.tex > refman.tex && \
-	$(RM) refman_save.tex && \
-		make && \
-	$(MV) refman.pdf refman.save && \
-	$(RM) *.pdf *.html *.tex *.aux *.sty *.log *.eps *.out *.ind *.idx \
-		*.ilg *.toc *.tps Makefile && \
-	$(MV) refman.save refman.pdf
+	$(RM) simple_message_client.o simple_message_client simple_message_server.o simple_message_server 
 
 ##
 ## ---------------------------------------------------------- dependencies --
