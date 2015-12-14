@@ -62,7 +62,7 @@
  */
 
 static const char *programName;
-static int verbose = 1;
+static int verbose = 0;
 
 /*
  * ------------------------------------------------------------- prototypes --
